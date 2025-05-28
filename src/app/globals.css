@@ -1,3 +1,4 @@
+/* globals.css */
 @import "tailwindcss";
 
 :root {
@@ -14,13 +15,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    /* --background variable will still change, but body won't use it directly for its main background */
     --background: #0a0a0a;
     --foreground: #ededed;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* background: var(--background); */ /* << COMMENT OUT OR DELETE THIS LINE */
+  color: var(--foreground); /* You can keep this if you want text color to adapt, or let MUI handle it too */
+  font-family: Arial, Helvetica, sans-serif; /* MUI's theme and Roboto will largely override this for MUI components */
 }
