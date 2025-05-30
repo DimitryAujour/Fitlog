@@ -15,11 +15,14 @@ import {
     CircularProgress,
     IconButton,
 } from '@mui/material';
-import SendIcon from '@mui/icons-material/Send'; // For the send button
+import SendIcon from '@mui/icons-material/Send';
 import { useAuth } from '@/context/AuthContext';
-import {router} from "next/client";
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app as firebaseApp } from '@/lib/firebase/clientApp';
+import { useRouter } from 'next/navigation';
+// Import the new function to get the initialized model and its type
+import { getInitializedGenerativeModel } from '@/lib/firebase/clientApp'; // Adjusted path if needed
+
+import type { GenerativeModel, ChatSession } from 'firebase/ai'; // Import types
+
 interface Message {
     id: string;
     text: string;
@@ -29,21 +32,76 @@ interface Message {
 
 export default function AiChatPage() {
     const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
     const [inputMessage, setInputMessage] = useState('');
     const [chatHistory, setChatHistory] = useState<Message[]>([]);
     const [isLoadingAiResponse, setIsLoadingAiResponse] = useState(false);
-    const messagesEndRef = useRef<null | HTMLDivElement>(null); // To scroll to bottom
+    const messagesEndRef = useRef<null | HTMLDivElement>(null);
+
+    // State for the actual GenerativeModel instance
+    const [model, setModel] = useState<GenerativeModel | null>(null);
+    const [isModelInitializing, setIsModelInitializing] = useState(true); // Loading state for the model
+
+    // State for the chat session
+    const [chatSession, setChatSession] = useState<ChatSession | null>(null);
+
+    // Effect to initialize the Generative Model
+    // In your ai-chat/page.tsx
+    useEffect(() => {
+        if (user) {
+            setIsModelInitializing(true);
+            console.log("User authenticated, attempting to initialize AI model...");
+            getInitializedGenerativeModel() // Call remains the same
+                .then(initializedModel => {
+                    setModel(initializedModel);
+                    console.log("AI Model initialized successfully for chat page.");
+                })
+                .catch(error => {
+                    console.error("Failed to initialize AI Model for chat page:", error);
+                    // Hopefully, the error message will be different now if this works, or gone!
+                })
+                .finally(() => {
+                    setIsModelInitializing(false);
+                });
+        } else {
+            // ...
+        }
+    }, [user]);
+
+    // Effect to initialize the chat session once the user and model are available
+    useEffect(() => {
+        if (user && model) {
+            console.log("User and AI Model are available, starting new chat session.");
+            // Initialize the chat session
+            const newChatSession = model.startChat({
+                history: [], // You can load past history here if needed
+                // safetySettings: Adjust safety settings if necessary
+                // generationConfig: Adjust generation config if necessary
+            });
+            setChatSession(newChatSession);
+        } else {
+            // If user or model is not available, clear the chat session
+            setChatSession(null);
+            if (user && !model && !isModelInitializing) {
+                console.warn("Chat session not started: Model is not available, but model initialization is complete.");
+            }
+        }
+    }, [user, model, isModelInitializing]); // Depend on user and the initialized model
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    useEffect(scrollToBottom, [chatHistory]); // Scroll to bottom when chat history changes
-// Replace the existing handleSendMessage in src/app/(application)/ai-chat/page.tsx
+    useEffect(scrollToBottom, [chatHistory]);
+
     const handleSendMessage = async (event?: React.FormEvent<HTMLFormElement>) => {
         if (event) event.preventDefault();
-        const currentMessageText = inputMessage.trim(); // Capture message before clearing
-        if (!currentMessageText) return;
+        const currentMessageText = inputMessage.trim();
+        // Ensure chatSession is active before sending a message
+        if (!currentMessageText || !chatSession) {
+            if (!chatSession) console.warn("Attempted to send message, but chat session is not active.");
+            return;
+        }
 
         const userMessage: Message = {
             id: `user-${Date.now()}`,
@@ -52,32 +110,64 @@ export default function AiChatPage() {
             timestamp: new Date(),
         };
         setChatHistory(prev => [...prev, userMessage]);
-        setInputMessage(''); // Clear input field
+        setInputMessage('');
         setIsLoadingAiResponse(true);
 
         try {
-            // Call your deployed Cloud Function
-            console.log(`Calling fitlogAiChat with prompt: "${currentMessageText}"`);
-            const result = await callFitlogAiChat({ prompt: currentMessageText });
+            console.log(`Sending message to AI: "${currentMessageText}"`);
+            const result = await chatSession.sendMessageStream(currentMessageText);
 
-            // The actual response from your Genkit flow is in result.data
-            const aiTextResponse = result.data as string;
-            console.log('Received AI response:', aiTextResponse);
-
-            if (typeof aiTextResponse !== 'string') {
-                console.error("Unexpected AI response format:", aiTextResponse);
-                throw new Error("AI response was not in the expected format.");
-            }
-
-            const aiResponseMessage: Message = {
-                id: `ai-${Date.now()}`,
-                text: aiTextResponse,
+            let aiResponseText = '';
+            const aiMessageId = `ai-${Date.now()}`;
+            const aiPartialMessage: Message = {
+                id: aiMessageId,
+                text: '...',
                 sender: 'ai',
                 timestamp: new Date(),
             };
-            setChatHistory(prev => [...prev, aiResponseMessage]);
+            setChatHistory(prev => [...prev, aiPartialMessage]);
+
+            for await (const item of result.stream) {
+                if (item.candidates && item.candidates.length > 0) {
+                    const chunk = item.candidates[0]?.content?.parts?.[0]?.text;
+                    if (chunk) {
+                        aiResponseText += chunk;
+                        setChatHistory(prev =>
+                            prev.map(msg =>
+                                msg.id === aiMessageId ? { ...msg, text: aiResponseText } : msg
+                            )
+                        );
+                    }
+                }
+            }
+            console.log('Received streamed AI response:', aiResponseText);
+
+            // Fallback if stream was empty but full response has content (less common for streaming)
+            if (!aiResponseText && result.response.candidates && result.response.candidates.length > 0) {
+                const fullResponseText = result.response.candidates[0]?.content?.parts?.[0]?.text;
+                if (fullResponseText) {
+                    aiResponseText = fullResponseText;
+                    setChatHistory(prev =>
+                        prev.map(msg =>
+                            msg.id === aiMessageId ? { ...msg, text: aiResponseText } : msg
+                        )
+                    );
+                }
+            }
+
+            if (!aiResponseText) {
+                // This handles cases where the AI genuinely might not have a text response
+                // or if there was an issue not caught as an error by sendMessageStream
+                console.warn("AI response text was empty after streaming.");
+                setChatHistory(prev =>
+                    prev.map(msg =>
+                        msg.id === aiMessageId ? { ...msg, text: "[No text response from AI]" } : msg
+                    )
+                );
+            }
+
         } catch (error: any) {
-            console.error('Error calling AI chat function:', error);
+            console.error('Error sending message to AI:', error);
             let errorMessage = 'Sorry, I encountered an error. Please try again.';
             if (error.message) {
                 errorMessage += ` Details: ${error.message}`;
@@ -85,10 +175,19 @@ export default function AiChatPage() {
             const errorResponseMessage: Message = {
                 id: `err-${Date.now()}`,
                 text: errorMessage,
-                sender: 'ai', // Display error as an AI message
+                sender: 'ai',
                 timestamp: new Date(),
             };
-            setChatHistory(prev => [...prev, errorResponseMessage]);
+            // Replace the partial AI message with the error message, or add new
+            setChatHistory(prev => {
+                const existingAiMessageIndex = prev.findIndex(msg => msg.id.startsWith('ai-') && msg.text === '...');
+                if (existingAiMessageIndex !== -1) {
+                    const updatedHistory = [...prev];
+                    updatedHistory[existingAiMessageIndex] = errorResponseMessage; // Replace placeholder
+                    return updatedHistory;
+                }
+                return [...prev, errorResponseMessage]; // Add as new if no placeholder
+            });
         } finally {
             setIsLoadingAiResponse(false);
         }
@@ -98,16 +197,36 @@ export default function AiChatPage() {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
     }
     if (!user) {
-        // Redirect or show login prompt - protected route HOC/middleware would be better
         if (typeof window !== 'undefined') router.push('/login');
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
     }
-    const functions = getFunctions(firebaseApp);
-    const callFitlogAiChat = httpsCallable(functions, 'fitlogAiChat');
+
+    // UI for when the model itself is initializing
+    if (isModelInitializing) {
+        return (
+            <Container maxWidth="md" sx={{ textAlign: 'center', mt: 4 }}>
+                <CircularProgress />
+                <Typography variant="h6" sx={{ mt: 2 }}>
+                    Initializing AI Coach...
+                </Typography>
+            </Container>
+        );
+    }
+
+    // UI when model failed to initialize (and no chat session can be formed)
+    if (!model && !isModelInitializing) {
+        return (
+            <Container maxWidth="md" sx={{ textAlign: 'center', mt: 4 }}>
+                <Typography variant="h6" color="error" sx={{ mt: 2 }}>
+                    Failed to initialize AI Coach. Please try refreshing the page or contact support if the issue persists.
+                </Typography>
+            </Container>
+        );
+    }
 
     return (
-        <Container maxWidth="md" sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px - 32px)', // Adjust based on your header/footer
-            maxHeight: '800px', // Max height for the chat container
+        <Container maxWidth="md" sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px - 32px)',
+            maxHeight: '800px', // Example max height
             mt: 2, mb:2
         }}>
             <Typography variant="h4" component="h1" gutterBottom textAlign="center">
@@ -119,7 +238,7 @@ export default function AiChatPage() {
                     flexGrow: 1,
                     display: 'flex',
                     flexDirection: 'column',
-                    overflow: 'hidden', // To contain the scrolling list
+                    overflow: 'hidden',
                 }}
             >
                 <List sx={{ flexGrow: 1, overflowY: 'auto', p: 2 }}>
@@ -133,25 +252,32 @@ export default function AiChatPage() {
                                     backgroundColor: msg.sender === 'user' ? 'primary.main' : 'secondary.main',
                                     color: msg.sender === 'user' ? 'primary.contrastText' : 'secondary.contrastText',
                                     maxWidth: '70%',
+                                    wordBreak: 'break-word',
                                 }}
                             >
                                 <ListItemText
-                                    primary={msg.text}
+                                    primary={<Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</Typography>}
                                     secondary={msg.timestamp.toLocaleTimeString()}
                                     secondaryTypographyProps={{color: msg.sender === 'user' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)'}}
                                 />
                             </Paper>
                         </ListItem>
                     ))}
-                    <div ref={messagesEndRef} /> {/* Anchor for scrolling */}
+                    <div ref={messagesEndRef} />
                 </List>
 
                 {isLoadingAiResponse && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 1 }}>
                         <CircularProgress size={24} />
                         <Typography variant="caption" sx={{ml:1}}>AI is thinking...</Typography>
                     </Box>
                 )}
+                {!chatSession && !isModelInitializing && user && model && ( // Show if chat session couldn't be made for some reason but model is there
+                    <Box sx={{ p: 2, textAlign: 'center' }}>
+                        <Typography variant="caption" color="error">Could not start chat session. Please try refreshing.</Typography>
+                    </Box>
+                )}
+
 
                 <Box
                     component="form"
@@ -161,13 +287,19 @@ export default function AiChatPage() {
                     <TextField
                         fullWidth
                         variant="outlined"
-                        placeholder="Ask your FitLog AI Coach..."
+                        placeholder={!chatSession ? "Initializing chat..." : "Ask your FitLog AI Coach..."}
                         value={inputMessage}
                         onChange={(e) => setInputMessage(e.target.value)}
+                        onKeyPress={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSendMessage();
+                            }
+                        }}
                         size="small"
-                        disabled={isLoadingAiResponse}
+                        disabled={isLoadingAiResponse || !chatSession} // Disable if AI is responding or chat session isn't ready
                     />
-                    <IconButton type="submit" color="primary" disabled={isLoadingAiResponse || !inputMessage.trim()}>
+                    <IconButton type="submit" color="primary" disabled={isLoadingAiResponse || !inputMessage.trim() || !chatSession}>
                         <SendIcon />
                     </IconButton>
                 </Box>
