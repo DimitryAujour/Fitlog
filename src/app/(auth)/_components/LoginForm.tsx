@@ -3,13 +3,16 @@
 
 import React, { useState } from 'react';
 import { Button, TextField, Box, Typography, Alert, Divider } from '@mui/material';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup} from 'firebase/auth'; // Import AuthError
 import { auth } from '@/lib/firebase/clientApp';
 import { useRouter } from 'next/navigation';
 
-// MUI Icon for Google, ensure you have @mui/icons-material installed
-// npm install @mui/icons-material
 import GoogleIcon from '@mui/icons-material/Google';
+
+// It can be helpful to define a type for Firebase errors if you're checking specific codes
+interface FirebaseError extends Error {
+    code?: string;
+}
 
 const LoginForm = () => {
     const [email, setEmail] = useState('');
@@ -29,12 +32,13 @@ const LoginForm = () => {
         try {
             await signInWithEmailAndPassword(auth, email, password);
             router.push('/dashboard');
-        } catch (err: any) {
+        } catch (err) { // Changed from catch (err: any)
             console.error('Firebase email/password login error:', err);
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+            const firebaseError = err as FirebaseError; // Type assertion
+            if (firebaseError.code === 'auth/user-not-found' || firebaseError.code === 'auth/wrong-password' || firebaseError.code === 'auth/invalid-credential') {
                 setError('Invalid email or password. Please try again.');
             } else {
-                setError(err.message || 'Failed to sign in. Please try again.');
+                setError(firebaseError.message || 'Failed to sign in. Please try again.');
             }
         }
     };
@@ -44,15 +48,13 @@ const LoginForm = () => {
         const provider = new GoogleAuthProvider();
         try {
             await signInWithPopup(auth, provider);
-            // User signed in successfully with Google
-            // Firebase automatically handles linking if the email exists
-            // or creates a new user.
             router.push('/dashboard');
-        } catch (err: any) {
+        } catch (err) { // Changed from catch (err: any)
             console.error('Firebase Google sign-in error:', err);
+            const firebaseError = err as FirebaseError; // Type assertion
             // Handle specific Google Sign-In errors if needed
-            // e.g., err.code === 'auth/popup-closed-by-user'
-            setError(err.message || 'Failed to sign in with Google. Please try again.');
+            // e.g., firebaseError.code === 'auth/popup-closed-by-user'
+            setError(firebaseError.message || 'Failed to sign in with Google. Please try again.');
         }
     };
 
@@ -108,7 +110,7 @@ const LoginForm = () => {
                 color="primary"
                 fullWidth
                 onClick={handleGoogleSignIn}
-                startIcon={<GoogleIcon />} // Add Google icon
+                startIcon={<GoogleIcon />}
             >
                 Sign in with Google
             </Button>

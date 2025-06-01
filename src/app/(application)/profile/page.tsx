@@ -3,48 +3,62 @@
 import React, { useEffect, useState } from 'react';
 import {
     Box, Button, Container, TextField, Typography, CircularProgress,
-    Alert, Paper, Select, MenuItem, InputLabel, FormControl
-} from '@mui/material'; // Added Select, MenuItem, InputLabel, FormControl
+    Alert, Paper, Select, MenuItem, InputLabel, FormControl,
+    SelectChangeEvent // Import SelectChangeEvent
+} from '@mui/material';
 import { useAuth } from '@/context/AuthContext';
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'; // Added Timestamp
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp, FieldValue } from 'firebase/firestore'; // Import FieldValue
 import { firestore } from '@/lib/firebase/clientApp';
 
-// At the top of src/app/(application)/profile/page.tsx
 import {
     calculateAge,
     calculateBMR,
     calculateTDEE,
     calculateCalorieTarget,
     calculateMacronutrients,
-    FitnessGoal // Assuming you exported FitnessGoal type as well
+    FitnessGoal
 } from '@/lib/utils/fitnessCalculations';
 
 interface UserProfile {
     displayName?: string;
     email?: string;
     photoURL?: string;
-    birthDate?: string; // ISO string for input
+    birthDate?: string;
     weightKg?: number | string;
     heightCm?: number | string;
     gender?: string;
     activityLevel?: string;
     fitnessGoal?: string;
-    // Add other fields from your schema here
 }
 
-// Define options for select inputs
+// More specific type for data being saved to Firestore
+interface ProfileDataToSave {
+    displayName?: string;
+    email?: string;
+    photoURL?: string;
+    birthDate: Timestamp | null; // Stored as Timestamp or null
+    weightKg: number | null;     // Stored as number or null
+    heightCm: number | null;     // Stored as number or null
+    gender?: string;
+    activityLevel?: string;
+    fitnessGoal?: string;
+    updatedAt: FieldValue;
+    createdAt?: FieldValue; // Optional, only for new profiles
+}
+
+
 const genderOptions = [
     { value: 'male', label: 'Male' },
     { value: 'female', label: 'Female' },
     { value: 'other', label: 'Other' },
 ];
 
-const activityLevelOptions = [ // Based on plan section 4.1
+const activityLevelOptions = [
     { value: 'sedentary', label: 'Sedentary (little or no exercise)' },
-    { value: 'light', label: 'Lightly active (exercise 1-3 days/week)' }, // Corrected label from plan source
-    { value: 'moderate', label: 'Moderately active (exercise 3-5 days/week)' }, // Corrected label from plan source
-    { value: 'active', label: 'Very active (exercise 6-7 days/week)' }, // Corrected label from plan source ('active' in schema, 'very_active' in plan text)
-    { value: 'very_active', label: 'Extra active (very intense exercise daily or physical job)' }, // Corrected label from plan source ('very_active' in schema, 'extra active' in plan text)
+    { value: 'light', label: 'Lightly active (exercise 1-3 days/week)' },
+    { value: 'moderate', label: 'Moderately active (exercise 3-5 days/week)' },
+    { value: 'active', label: 'Very active (exercise 6-7 days/week)' },
+    { value: 'very_active', label: 'Extra active (very intense exercise daily or physical job)' },
 ];
 
 const fitnessGoalOptions = [
@@ -57,7 +71,6 @@ const fitnessGoalOptions = [
 export default function ProfilePage() {
     const { user, loading: authLoading } = useAuth();
     const [profile, setProfile] = useState<UserProfile>({
-        // Initialize all fields to prevent uncontrolled to controlled input warning
         displayName: '',
         email: '',
         photoURL: '',
@@ -72,7 +85,6 @@ export default function ProfilePage() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
-    // Moved these state declarations inside the component
     const [calculatedAge, setCalculatedAge] = useState<number | null>(null);
     const [bmr, setBmr] = useState<number | null>(null);
     const [tdee, setTdee] = useState<number | null>(null);
@@ -89,14 +101,13 @@ export default function ProfilePage() {
                     const docSnap = await getDoc(profileDocRef);
                     if (docSnap.exists()) {
                         const data = docSnap.data();
-                        // Ensure all fields in UserProfile are handled
                         setProfile({
                             displayName: data.displayName || user.displayName || '',
-                            email: data.email || user.email || '', // Email typically from auth
+                            email: data.email || user.email || '',
                             photoURL: data.photoURL || user.photoURL || '',
                             birthDate: data.birthDate && data.birthDate.toDate ? data.birthDate.toDate().toISOString().split('T')[0] : '',
-                            weightKg: data.weightKg || '',
-                            heightCm: data.heightCm || '',
+                            weightKg: data.weightKg !== undefined ? String(data.weightKg) : '', // Ensure string for input
+                            heightCm: data.heightCm !== undefined ? String(data.heightCm) : '', // Ensure string for input
                             gender: data.gender || '',
                             activityLevel: data.activityLevel || '',
                             fitnessGoal: data.fitnessGoal || '',
@@ -104,7 +115,7 @@ export default function ProfilePage() {
                     } else {
                         console.log('No such profile document! Setting defaults from auth.');
                         setProfile(prev => ({
-                            ...prev, // keep any partially filled form state
+                            ...prev,
                             email: user.email || '',
                             displayName: user.displayName || '',
                             photoURL: user.photoURL || '',
@@ -112,7 +123,11 @@ export default function ProfilePage() {
                     }
                 } catch (err) {
                     console.error("Error fetching profile:", err);
-                    setError("Failed to fetch profile data.");
+                    if (err instanceof Error) {
+                        setError(err.message || "Failed to fetch profile data.");
+                    } else {
+                        setError("An unknown error occurred while fetching profile data.");
+                    }
                 } finally {
                     setIsLoading(false);
                 }
@@ -148,20 +163,20 @@ export default function ProfilePage() {
                     setMacroTargets(null);
                 }
             } else {
-                // Reset if inputs are not valid for calculation
                 setBmr(null);
                 setTdee(null);
                 setCalorieTargetInfo(null);
                 setMacroTargets(null);
             }
         }
-    }, [profile]); // Note: React state setter functions (setCalculatedAge, setBmr, etc.) are stable and don't need to be in the dependency array.
+    }, [profile]);
 
-    const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | (Event & { target: { name: string; value: unknown } } ) ) => { // Adjusted for Select
-        const { name, value } = event.target as { name: string; value: string }; // Type assertion
+    // Updated handleChange to be more type-specific for SelectChangeEvent
+    const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>) => {
+        const target = event.target as { name: string; value: unknown }; // Value from Select is string
         setProfile(prevProfile => ({
             ...prevProfile,
-            [name]: value,
+            [target.name]: target.value as string, // Ensure value is string
         }));
     };
 
@@ -177,33 +192,44 @@ export default function ProfilePage() {
 
         const profileDocRef = doc(firestore, 'users', user.uid);
         try {
-            const dataToSave: any = {
-                ...profile,
-                // Ensure numeric fields are stored as numbers
+            // Error 1: Unexpected any. Specify a different type.
+            // Use the more specific ProfileDataToSave interface
+            const dataToSave: ProfileDataToSave = {
+                displayName: profile.displayName || '',
+                email: profile.email || user.email || '', // Ensure email is present
+                photoURL: profile.photoURL || '',
                 weightKg: profile.weightKg ? parseFloat(profile.weightKg as string) : null,
                 heightCm: profile.heightCm ? parseFloat(profile.heightCm as string) : null,
-                // Convert birthDate string back to Firestore Timestamp
                 birthDate: profile.birthDate ? Timestamp.fromDate(new Date(profile.birthDate)) : null,
+                gender: profile.gender || '',
+                activityLevel: profile.activityLevel || '',
+                fitnessGoal: profile.fitnessGoal || '',
                 updatedAt: serverTimestamp(),
             };
 
             const docSnap = await getDoc(profileDocRef);
             if (!docSnap.exists()) {
                 dataToSave.createdAt = serverTimestamp();
-                dataToSave.email = user.email; // Ensure email is saved for new profiles
+                if (!dataToSave.email && user.email) { // Ensure email is saved for new profiles
+                    dataToSave.email = user.email;
+                }
             }
 
             await setDoc(profileDocRef, dataToSave, { merge: true });
             setSuccess("Profile updated successfully!");
-        } catch (err) {
+        } catch (err) { // Changed from catch (err: any)
             console.error("Error updating profile:", err);
-            setError("Failed to update profile.");
+            if (err instanceof Error) {
+                setError(err.message || "Failed to update profile.");
+            } else {
+                setError("An unknown error occurred while updating profile.");
+            }
         } finally {
             setIsLoading(false);
         }
     };
 
-    if (authLoading || (isLoading && !user) ) { // Adjusted loading condition slightly
+    if (authLoading || (isLoading && !user) ) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
                 <CircularProgress />
@@ -275,7 +301,7 @@ export default function ProfilePage() {
                         id="birthDate"
                         value={profile.birthDate || ''}
                         onChange={handleChange}
-                        InputLabelProps={{ shrink: true }}
+                        InputLabelProps={{ shrink: true }} // Date input label should always shrink
                     />
 
                     {/* Gender Select */}
@@ -284,10 +310,10 @@ export default function ProfilePage() {
                         <Select
                             labelId="gender-label"
                             id="gender"
-                            name="gender"
+                            name="gender" // Ensure Select components have a name attribute
                             value={profile.gender || ''}
                             label="Gender"
-                            onChange={handleChange as any} // Cast for MUI Select's event type
+                            onChange={handleChange} // Removed 'as any'
                         >
                             {genderOptions.map((option) => (
                                 <MenuItem key={option.value} value={option.value}>
@@ -303,10 +329,10 @@ export default function ProfilePage() {
                         <Select
                             labelId="activityLevel-label"
                             id="activityLevel"
-                            name="activityLevel"
+                            name="activityLevel" // Ensure Select components have a name attribute
                             value={profile.activityLevel || ''}
                             label="Activity Level"
-                            onChange={handleChange as any}
+                            onChange={handleChange} // Removed 'as any'
                         >
                             {activityLevelOptions.map((option) => (
                                 <MenuItem key={option.value} value={option.value}>
@@ -322,10 +348,10 @@ export default function ProfilePage() {
                         <Select
                             labelId="fitnessGoal-label"
                             id="fitnessGoal"
-                            name="fitnessGoal"
+                            name="fitnessGoal" // Ensure Select components have a name attribute
                             value={profile.fitnessGoal || ''}
                             label="Fitness Goal"
-                            onChange={handleChange as any}
+                            onChange={handleChange} // Removed 'as any'
                         >
                             {fitnessGoalOptions.map((option) => (
                                 <MenuItem key={option.value} value={option.value}>

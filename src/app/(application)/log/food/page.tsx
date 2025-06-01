@@ -8,25 +8,22 @@ import {
     TextField,
     Typography,
     List,
-    ListItemButton, // Changed from ListItem button prop to ListItemButton for better semantics
+    ListItemButton,
     ListItemText,
     CircularProgress,
     Alert,
     Paper,
-    Grid, // For layout
+    Grid,
     Select,
     MenuItem,
     FormControl,
     InputLabel,
-    // Divider, // Divider was imported but not used in the provided complex version's search results. Keep or remove as needed.
 } from '@mui/material';
 import { useAuth } from '@/context/AuthContext';
 
-// Firebase imports for logging food
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/clientApp';
 
-// Define a type for the product data we expect from our API route
 interface FoodProduct {
     id: string;
     name: string;
@@ -43,25 +40,19 @@ interface FoodProduct {
     serving_size?: string;
 }
 
-// This interface can be used for type consistency if you fetch logged entries later
-interface LoggedFoodEntry {
-    foodName: string;
-    foodApiId: string | null;
-    date: string; // YYYY-MM-DD
-    mealType: string;
-    quantity: number; // This was the old field, new data structure uses servingsConsumed
-    unit: string;
-    calories: number;
-    proteinGrams: number;
-    carbGrams: number;
-    fatGrams: number;
-    // Fields from new handleLogFood if you want to align this interface:
-    // userId?: string;
-    // servingSizeDescription?: string;
-    // servingsConsumed?: number;
-    // loggedAt?: any; // Firestore Timestamp
-}
-
+// Error 1: 'LoggedFoodEntry' is defined but never used. - Removed this interface
+// interface LoggedFoodEntry {
+//     foodName: string;
+//     foodApiId: string | null;
+//     date: string; // YYYY-MM-DD
+//     mealType: string;
+//     quantity: number;
+//     unit: string;
+//     calories: number;
+//     proteinGrams: number;
+//     carbGrams: number;
+//     fatGrams: number;
+// }
 
 const mealTypeOptions = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
@@ -71,18 +62,15 @@ export default function FoodLogPage() {
     const [searchResults, setSearchResults] = useState<FoodProduct[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null); // For success messages
+    const [success, setSuccess] = useState<string | null>(null);
 
-    // State for the selected food item and logging form
     const [selectedFood, setSelectedFood] = useState<FoodProduct | null>(null);
     const [quantity, setQuantity] = useState<string>('100');
     const [unit, setUnit] = useState<string>('g');
     const [mealType, setMealType] = useState<string>(mealTypeOptions[0]);
     const [logDate, setLogDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
-    // State for calculated nutrients of the selected amount
     const [consumedNutrients, setConsumedNutrients] = useState<{calories: number, protein: number, carbs: number, fat: number} | null>(null);
-
 
     const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -109,9 +97,14 @@ export default function FoodLogPage() {
             if ((data.products || []).length === 0) {
                 setError('No results found for your query.');
             }
-        } catch (err: any) {
+            // Error 2: Unexpected any. Specify a different type.
+        } catch (err) { // Changed from catch (err: any)
             console.error('Food search error:', err);
-            setError(err.message || 'An error occurred while searching for food.');
+            if (err instanceof Error) {
+                setError(err.message || 'An error occurred while searching for food.');
+            } else {
+                setError('An unknown error occurred while searching for food.');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -144,24 +137,22 @@ export default function FoodLogPage() {
         }
     }, [selectedFood, quantity, unit]);
 
-
-    const handleLogFood = async () => { // Made async
+    const handleLogFood = async () => {
         if (!selectedFood || !consumedNutrients || !user) {
             setError("Please select a food and ensure all details are correct.");
             setSuccess(null);
             return;
         }
 
-        setIsLoading(true); // Indicate loading state during save
+        setIsLoading(true);
         setError(null);
         setSuccess(null);
 
-        // Prepare the data object
         const foodEntryData = {
             userId: user.uid,
             foodName: selectedFood.name,
             foodApiId: selectedFood.id || null,
-            date: logDate, // YYYY-MM-DD string
+            date: logDate,
             mealType: mealType,
             servingSizeDescription: `${quantity} ${unit}`,
             servingsConsumed: parseFloat(quantity) || 0,
@@ -170,7 +161,7 @@ export default function FoodLogPage() {
             proteinGrams: parseFloat(consumedNutrients.protein.toFixed(1)),
             carbGrams: parseFloat(consumedNutrients.carbs.toFixed(1)),
             fatGrams: parseFloat(consumedNutrients.fat.toFixed(1)),
-            loggedAt: serverTimestamp(), // Firestore server timestamp
+            loggedAt: serverTimestamp(),
         };
 
         try {
@@ -180,24 +171,27 @@ export default function FoodLogPage() {
             console.log("Food entry logged with ID: ", docRef.id, foodEntryData);
             setSuccess("Food item logged successfully!");
 
-            // Clear the form/selection after successful logging
             setSelectedFood(null);
-            setSearchQuery(''); // Optionally clear search query
-            setSearchResults([]); // Optionally clear search results
+            setSearchQuery('');
+            setSearchResults([]);
             setQuantity('100');
-            setUnit('g'); // Reset unit to default
+            setUnit('g');
             setMealType(mealTypeOptions[0]);
-            setLogDate(new Date().toISOString().split('T')[0]); // Reset date to today
+            setLogDate(new Date().toISOString().split('T')[0]);
             setConsumedNutrients(null);
 
-        } catch (err: any) {
+            // Error 3: Unexpected any. Specify a different type.
+        } catch (err) { // Changed from catch (err: any)
             console.error("Error logging food to Firestore:", err);
-            setError(err.message || "Failed to log food item. Please try again.");
+            if (err instanceof Error) {
+                setError(err.message || "Failed to log food item. Please try again.");
+            } else {
+                setError("An unknown error occurred while logging food item. Please try again.");
+            }
         } finally {
-            setIsLoading(false); // Stop loading indicator
+            setIsLoading(false);
         }
     };
-
 
     if (authLoading) {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
@@ -219,7 +213,6 @@ export default function FoodLogPage() {
                     <Button type="submit" variant="contained" disabled={isLoading && !selectedFood}>{isLoading && !selectedFood ? <CircularProgress size={24} /> : 'Search'}</Button>
                 </Box>
 
-
                 <Grid container spacing={3}>
                     <Grid item xs={12} md={selectedFood ? 6 : 12}>
                         {searchResults.length > 0 && !selectedFood && (
@@ -234,8 +227,9 @@ export default function FoodLogPage() {
                                 </List>
                             </Box>
                         )}
-                        {searchResults.length === 0 && !isLoading && searchQuery && !error && !success && ( // don't show "no results" if success message is shown
-                            <Typography>No results found for "{searchQuery}". Try a different search term.</Typography>
+                        {/* Errors 4 & 5: `"` can be escaped with `&quot;`... */}
+                        {searchResults.length === 0 && !isLoading && searchQuery && !error && !success && (
+                            <Typography>No results found for &quot;{searchQuery}&quot;. Try a different search term.</Typography>
                         )}
                     </Grid>
 
@@ -317,7 +311,7 @@ export default function FoodLogPage() {
                                 color="primary"
                                 sx={{ mt: 2 }}
                                 fullWidth
-                                disabled={!consumedNutrients || isLoading} // Disable if no nutrients or if already loading (saving)
+                                disabled={!consumedNutrients || isLoading}
                             >
                                 {isLoading && selectedFood ? <CircularProgress size={24} /> : 'Log This Food'}
                             </Button>

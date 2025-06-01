@@ -1,9 +1,15 @@
-'use client'; // This component will use client-side hooks (useState, etc.) and interact with Firebase
+// src/app/(auth)/_components/RegistrationForm.tsx
+'use client';
 
 import React, { useState } from 'react';
 import { Button, TextField, Box, Typography, Alert } from '@mui/material';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase/clientApp'; // Import your Firebase auth instance
+import { createUserWithEmailAndPassword } from 'firebase/auth'; // Import AuthError
+import { auth } from '@/lib/firebase/clientApp';
+
+// Define a type for Firebase errors if you're checking specific codes
+interface FirebaseError extends Error {
+    code?: string;
+}
 
 const RegistrationForm = () => {
     const [email, setEmail] = useState('');
@@ -13,8 +19,8 @@ const RegistrationForm = () => {
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        setError(null); // Clear previous errors
-        setSuccess(null); // Clear previous success messages
+        setError(null);
+        setSuccess(null);
 
         if (!email || !password) {
             setError("Please enter both email and password.");
@@ -23,27 +29,20 @@ const RegistrationForm = () => {
 
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            // User created successfully
             console.log('User created:', userCredential.user);
             setSuccess(`User account created successfully for ${userCredential.user.email}! You can now login.`);
-            // Optionally, you can redirect the user to the login page or dashboard
-            // For example, using Next.js router:
-            // import { useRouter } from 'next/navigation';
-            // const router = useRouter();
-            // router.push('/login');
-            setEmail(''); // Clear form
-
+            setEmail('');
             setPassword('');
-        } catch (err: any) {
-            // Handle Firebase errors
+        } catch (err) { // Changed from catch (err: any)
             console.error('Firebase registration error:', err);
-            // More specific error handling based on err.code can be added here
-            if (err.code === 'auth/email-already-in-use') {
+            const firebaseError = err as FirebaseError; // Type assertion
+
+            if (firebaseError.code === 'auth/email-already-in-use') {
                 setError('This email address is already in use.');
-            } else if (err.code === 'auth/weak-password') {
+            } else if (firebaseError.code === 'auth/weak-password') {
                 setError('The password is too weak. It should be at least 6 characters.');
             } else {
-                setError(err.message || 'Failed to create account. Please try again.');
+                setError(firebaseError.message || 'Failed to create account. Please try again.');
             }
         }
     };
@@ -56,14 +55,14 @@ const RegistrationForm = () => {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 2, // Spacing between elements
-                mt: 4, // Margin top
-                p: 3, // Padding
+                gap: 2,
+                mt: 4,
+                p: 3,
                 border: '1px solid',
                 borderColor: 'divider',
                 borderRadius: 2,
                 maxWidth: 400,
-                mx: 'auto', // Center the form
+                mx: 'auto',
             }}
         >
             <Typography variant="h5" component="h1" gutterBottom>

@@ -1,3 +1,4 @@
+// src/theme/theme.ts
 'use client';
 
 import { createTheme } from '@mui/material/styles';
@@ -10,30 +11,23 @@ const roboto = Roboto({
 });
 
 const theme = createTheme({
-    breakpoints: undefined,
-    colorSchemes: undefined,
-    cssVariables: undefined,
-    defaultColorScheme: undefined,
-    direction: undefined,
-    mixins: undefined,
-    shadows: ["none", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-    shape: undefined,
-    spacing: undefined,
-    transitions: undefined,
+    // REMOVED: Properties like breakpoints, direction, mixins, shape, spacing,
+    // transitions, zIndex, etc., that were previously set to undefined.
+    // Let MUI handle their defaults.
+
+    // REMOVED or COMMENTED OUT: shadows array. Let MUI use default shadows for now.
+    // shadows: ["none", "", "", ...], // This was problematic
+
+    // This is a valid option if you need it
     unstable_strictMode: false,
-    unstable_sxConfig: undefined,
-    zIndex: undefined,
+
     palette: {
-        mode: 'light', // Stays light mode
+        mode: 'light',
         primary: {
-            // main: '#413D65', // Original Muted Purple/Indigo
-            main: '#6A679E', // A slightly lighter shade of your Muted Purple/Indigo
-            // Alternatively, for a more noticeable change:
-            // main: '#788DFF', // A lighter, softer blue/purple
+            main: '#6A679E', // Your chosen primary color
         },
         secondary: {
-            // main: '#5FB9B0', // Original Teal/Turquoise
-            main: '#6ECDC2', // A slightly lighter shade of your Teal/Turquoise
+            main: '#6ECDC2', // Your chosen secondary color
         },
         error: {
             main: '#f44336',
@@ -46,33 +40,26 @@ const theme = createTheme({
         },
         success: {
             main: '#66bb6a',
-            // You could also use your accent green here if you prefer:
-            // main: '#BEF992',
-            // contrastText: '#2B1F31', // Ensure good contrast if using a very light success color
         },
         background: {
-            default: '#f4f6f8', // This is already very light
-            paper: '#ffffff',   // This is pure white
+            default: '#f4f6f8',
+            paper: '#ffffff',
         },
         text: {
-            // primary: '#2B1F31', // Original Dark Purple/Charcoal
-            primary: '#3A3B3C',   // A softer, standard dark grey for better perceived lightness
-            secondary: '#6c757d', // Existing muted grey, still good
+            primary: '#3A3B3C',
+            secondary: '#6c757d',
         },
-        // Example of using your accentGreen if you want a bright, light accent color
-        // It's often good for specific highlights rather than a primary/secondary.
-        accentGreen: {
+        accentGreen: { // Your custom color
             main: '#BEF992',
-            contrastText: '#2B1F31', // Text color that would go on top of this green
+            contrastText: '#2B1F31',
         },
     },
     typography: {
-        fontFamily: roboto.style.fontFamily, // Using the direct style from Next/Font
+        fontFamily: roboto.style.fontFamily, // Correctly using Next/Font
         h1: {
             fontSize: '2.5rem',
             fontWeight: 500,
-            // color: '#2B1F31', // Original
-            color: '#3A3B3C', // Aligning with the new lighter primary text color
+            color: '#3A3B3C',
         },
         h2: {
             fontSize: '2rem',
@@ -90,19 +77,20 @@ const theme = createTheme({
         body2: {
             color: '#6c757d',
         }
-        // You can continue to customize other typography variants
     },
     components: {
         MuiAppBar: {
-            styleOverrides: {
-                // Example: If your AppBar uses primary color and feels too dark
-                // colorPrimary: {
-                //   backgroundColor: '#7F7CBB', // A lighter version of your primary for AppBars
-                // },
-            },
+            // Example: If your AppBar uses primary color and feels too dark
+            // styleOverrides: {
+            //   colorPrimary: {
+            //     backgroundColor: '#7F7CBB',
+            //   },
+            // },
         },
         MuiPaper: {
-            elevation: 1, // Softer default elevation for paper components
+            defaultProps: { // Corrected structure for defaultProps
+                elevation: 1,
+            },
         },
         // MuiButton: {
         //   styleOverrides: {
