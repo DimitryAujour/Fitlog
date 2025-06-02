@@ -4,7 +4,7 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext'; // Your AuthContext
-import { Box, CircularProgress, Container, Typography } from '@mui/material';
+import {  CircularProgress, Container, Typography } from '@mui/material';
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
