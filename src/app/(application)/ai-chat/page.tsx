@@ -28,7 +28,9 @@ import type {
 
 import {
     getUserProfileAndTargetsForAI,
-    getTodaysFoodLogSummaryForAI,
+    getDailyNutritionalSummaryForAI, // <-- Correct function name
+    // Ensure you also import the type if you use it for the variable
+    // AiContextDailySummary
 } from '@/lib/aiContextHelper';
 
 interface Message {
@@ -119,7 +121,7 @@ export default function AiChatPage() {
 
         try {
             const userProfileData = await getUserProfileAndTargetsForAI(user.uid);
-            const todaysLogSummary = await getTodaysFoodLogSummaryForAI(user.uid);
+            const todaysLogSummary = await getDailyNutritionalSummaryForAI(user.uid);
 
             const contextStrings: string[] = [];
             contextStrings.push("System: You are FitLog AI..."); // Keep your system prompt

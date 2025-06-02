@@ -22,6 +22,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ChatIcon from '@mui/icons-material/Chat';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu'; // Food Log
+import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import NextLink from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext'; // To potentially show user info or logout
@@ -44,7 +45,7 @@ const mainNavItems: NavItem[] = [
     { text: 'Dashboard', href: '/dashboard', icon: <DashboardIcon /> },
     { text: 'AI Coach', href: '/ai-chat', icon: <ChatIcon /> },
     { text: 'Log Food', href: '/log/food', icon: <RestaurantMenuIcon /> },
-    // { text: 'Log Exercise', href: '/log/exercise', icon: <FitnessCenterIcon /> }, // Example for future
+    { text: 'Log Exercise', href: '/log/exercise', icon: <FitnessCenterIcon /> }, // New item
 ];
 
 const userNavItems: NavItem[] = [
