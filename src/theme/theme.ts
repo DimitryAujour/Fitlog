@@ -49,10 +49,7 @@ const theme = createTheme({
             primary: '#3A3B3C',
             secondary: '#6c757d',
         },
-        accentGreen: { // Your custom color
-            main: '#BEF992',
-            contrastText: '#2B1F31',
-        },
+
     },
     typography: {
         fontFamily: roboto.style.fontFamily, // Correctly using Next/Font

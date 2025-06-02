@@ -1,3 +1,4 @@
+// src/app/(application)/log/food/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -13,14 +14,13 @@ import {
     CircularProgress,
     Alert,
     Paper,
-    Grid,
+    Grid, // Grid is imported
     Select,
     MenuItem,
     FormControl,
     InputLabel,
 } from '@mui/material';
 import { useAuth } from '@/context/AuthContext';
-
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/clientApp';
 
@@ -39,20 +39,6 @@ interface FoodProduct {
     };
     serving_size?: string;
 }
-
-// Error 1: 'LoggedFoodEntry' is defined but never used. - Removed this interface
-// interface LoggedFoodEntry {
-//     foodName: string;
-//     foodApiId: string | null;
-//     date: string; // YYYY-MM-DD
-//     mealType: string;
-//     quantity: number;
-//     unit: string;
-//     calories: number;
-//     proteinGrams: number;
-//     carbGrams: number;
-//     fatGrams: number;
-// }
 
 const mealTypeOptions = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
@@ -97,8 +83,7 @@ export default function FoodLogPage() {
             if ((data.products || []).length === 0) {
                 setError('No results found for your query.');
             }
-            // Error 2: Unexpected any. Specify a different type.
-        } catch (err) { // Changed from catch (err: any)
+        } catch (err) { // Corrected error typing
             console.error('Food search error:', err);
             if (err instanceof Error) {
                 setError(err.message || 'An error occurred while searching for food.');
@@ -122,7 +107,7 @@ export default function FoodLogPage() {
         if (selectedFood && selectedFood.nutriments && quantity) {
             const numQuantity = parseFloat(quantity);
             if (!isNaN(numQuantity) && numQuantity > 0) {
-                const ratio = (unit === 'g') ? (numQuantity / 100) : numQuantity;
+                const ratio = (unit === 'g') ? (numQuantity / 100) : numQuantity; // Assuming 'serving' unit implies quantity is # of servings
                 setConsumedNutrients({
                     calories: (selectedFood.nutriments.calories_100g || 0) * ratio,
                     protein: (selectedFood.nutriments.protein_100g || 0) * ratio,
@@ -155,8 +140,8 @@ export default function FoodLogPage() {
             date: logDate,
             mealType: mealType,
             servingSizeDescription: `${quantity} ${unit}`,
-            servingsConsumed: parseFloat(quantity) || 0,
-            unit: unit,
+            servingsConsumed: parseFloat(quantity) || 0, // Assuming quantity is the number of servings if unit is 'serving'
+            // unit: unit, // You might want to store the unit explicitly if it's ambiguous
             calories: parseFloat(consumedNutrients.calories.toFixed(1)),
             proteinGrams: parseFloat(consumedNutrients.protein.toFixed(1)),
             carbGrams: parseFloat(consumedNutrients.carbs.toFixed(1)),
@@ -179,9 +164,7 @@ export default function FoodLogPage() {
             setMealType(mealTypeOptions[0]);
             setLogDate(new Date().toISOString().split('T')[0]);
             setConsumedNutrients(null);
-
-            // Error 3: Unexpected any. Specify a different type.
-        } catch (err) { // Changed from catch (err: any)
+        } catch (err) { // Corrected error typing
             console.error("Error logging food to Firestore:", err);
             if (err instanceof Error) {
                 setError(err.message || "Failed to log food item. Please try again.");
@@ -197,6 +180,10 @@ export default function FoodLogPage() {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
     }
     if (!user) {
+        // For client-side redirect, ensure this only runs in the browser
+        if (typeof window !== 'undefined') {
+            // router.push('/login'); // Assuming router is defined if you uncomment this
+        }
         return <Typography sx={{ textAlign: 'center', mt: 5 }}>Please log in to log food.</Typography>;
     }
 
@@ -214,7 +201,8 @@ export default function FoodLogPage() {
                 </Box>
 
                 <Grid container spacing={3}>
-                    <Grid item xs={12} md={selectedFood ? 6 : 12}>
+                    {/* CORRECTED GRID ITEM BELOW */}
+                    <Grid size={{ xs: 12, md: selectedFood ? 6 : 12 }}>
                         {searchResults.length > 0 && !selectedFood && (
                             <Box>
                                 <Typography variant="h6" gutterBottom>Search Results:</Typography>
@@ -227,14 +215,14 @@ export default function FoodLogPage() {
                                 </List>
                             </Box>
                         )}
-                        {/* Errors 4 & 5: `"` can be escaped with `&quot;`... */}
                         {searchResults.length === 0 && !isLoading && searchQuery && !error && !success && (
                             <Typography>No results found for &quot;{searchQuery}&quot;. Try a different search term.</Typography>
                         )}
                     </Grid>
 
                     {selectedFood && (
-                        <Grid item xs={12} md={6}>
+                        // CORRECTED GRID ITEM BELOW
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <Typography variant="h6" gutterBottom>Log: {selectedFood.name}</Typography>
                             {selectedFood.brands && <Typography variant="caption" display="block" gutterBottom>Brand: {selectedFood.brands}</Typography>}
                             {selectedFood.nutriments && (
@@ -255,8 +243,10 @@ export default function FoodLogPage() {
                                 margin="normal"
                                 InputLabelProps={{ shrink: true }}
                             />
+                            {/* This is a nested Grid container for quantity and unit */}
                             <Grid container spacing={1} alignItems="flex-end">
-                                <Grid item xs={8}>
+                                {/* CORRECTED GRID ITEM BELOW */}
+                                <Grid size={8}> {/* Assuming you want this to take 8 out of 12 columns of its parent */}
                                     <TextField
                                         label="Quantity"
                                         type="number"
@@ -267,7 +257,8 @@ export default function FoodLogPage() {
                                         InputProps={{ inputProps: { min: 0, step: "any" } }}
                                     />
                                 </Grid>
-                                <Grid item xs={4}>
+                                {/* CORRECTED GRID ITEM BELOW */}
+                                <Grid size={4}> {/* Assuming you want this to take 4 out of 12 columns of its parent */}
                                     <FormControl fullWidth margin="normal">
                                         <InputLabel id="unit-label">Unit</InputLabel>
                                         <Select

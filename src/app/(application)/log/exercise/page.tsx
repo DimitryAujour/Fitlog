@@ -141,6 +141,9 @@ export default function LogExercisePage() {
             date: exerciseDate,
             ...(numDurationMinutes !== undefined && { durationMinutes: numDurationMinutes }),
         };
+        // Inside handleLogExercise function
+
+        // ... (try block)
         try {
             const exerciseEntriesCollectionRef = collection(firestore, 'users', user.uid, 'exerciseEntries');
             await addDoc(exerciseEntriesCollectionRef, {
@@ -151,14 +154,17 @@ export default function LogExercisePage() {
             setExerciseName('');
             setCaloriesBurned('');
             setDurationMinutes('');
-        } catch (err: any) {
+        } catch (err) { // Changed from (err: any)
             console.error("Error logging exercise to Firestore:", err);
-            setLogError(err.message || "Failed to log exercise. Please try again.");
+            if (err instanceof Error) { // Type guard
+                setLogError(err.message || "Failed to log exercise. Please try again.");
+            } else {
+                setLogError("An unknown error occurred while logging exercise.");
+            }
         } finally {
             setIsLoggingExercise(false);
         }
     };
-
     const handleAiSendMessage = async (event?: React.FormEvent<HTMLFormElement>) => {
         if (event) event.preventDefault();
         const currentAiMessageText = aiInputMessage.trim();
@@ -208,11 +214,19 @@ export default function LogExercisePage() {
                 }
             }
             // Fallback and error handling like in your main chat page
-            if (!aiResponseText && result.response.candidates && result.response.candidates.length > 0) {
-                const fullText = result.response.candidates[0]?.content?.parts?.[0]?.text;
-                if (fullText) {
-                    aiResponseText = fullText;
-                    setAiChatHistory(prev => prev.map(msg => msg.id === aiMessageId ? { ...msg, text: aiResponseText } : msg ));
+            if (!aiResponseText) {
+                // Await the promise to get the actual response object
+                const fullResponseObject = await result.response;
+                if (fullResponseObject.candidates && fullResponseObject.candidates.length > 0) {
+                    const fullText = fullResponseObject.candidates[0]?.content?.parts?.[0]?.text;
+                    if (fullText) {
+                        aiResponseText = fullText;
+                        setAiChatHistory(prev =>
+                            prev.map(msg =>
+                                msg.id === aiMessageId ? { ...msg, text: aiResponseText } : msg
+                            )
+                        );
+                    }
                 }
             }
             if (!aiResponseText) {
@@ -220,11 +234,17 @@ export default function LogExercisePage() {
             }
 
 
-        } catch (error: any) {
+        } catch (error) { // Changed from (error: any)
             console.error('Error sending AI message on exercise page:', error);
+            let detailMessage = 'Could not get AI response.';
+            if (error instanceof Error) { // Type guard
+                detailMessage = error.message || detailMessage;
+            } else if (typeof error === 'string') {
+                detailMessage = error;
+            }
             const errorMsg: ChatMessage = {
                 id: `err-ai-${Date.now()}`,
-                text: `Error: ${error.message || 'Could not get AI response.'}`,
+                text: `Error: ${detailMessage}`,
                 sender: 'ai',
                 timestamp: new Date(),
             };
@@ -247,11 +267,13 @@ export default function LogExercisePage() {
         return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
     }
 
+
     return (
-        <Container maxWidth="md"> {/* Changed to md to give more space for two sections */}
-            <Grid container spacing={4} sx={{ my: 4 }}>
+        <Container maxWidth="md">
+            <Grid container spacing={4} sx={{ my: 4 }}> {/* This is the Grid container */}
                 {/* Exercise Logging Form Section */}
-                <Grid item xs={12} md={6}>
+                {/* CORRECTED GRID ITEM BELOW */}
+                <Grid size={{ xs: 12, md: 6 }}>
                     <Paper sx={{ p: 3, height: '100%' }}>
                         <Typography variant="h5" component="h1" gutterBottom>
                             Log Your Exercise
@@ -259,6 +281,7 @@ export default function LogExercisePage() {
                         {logError && <Alert severity="error" sx={{ mb: 2 }}>{logError}</Alert>}
                         {logSuccess && <Alert severity="success" sx={{ mb: 2 }}>{logSuccess}</Alert>}
                         <Box component="form" onSubmit={handleLogExercise} noValidate sx={{ mt: 1 }}>
+                            {/* ... (your TextFields and Button for the form) ... */}
                             <TextField margin="normal" required fullWidth id="exerciseName" label="Exercise Name" name="exerciseName" value={exerciseName} onChange={(e) => setExerciseName(e.target.value)} autoFocus />
                             <TextField margin="normal" required fullWidth name="caloriesBurned" label="Calories Burned" type="number" id="caloriesBurned" value={caloriesBurned} onChange={(e) => setCaloriesBurned(e.target.value)} InputProps={{ inputProps: { min: 0, step: "any" } }} />
                             <TextField margin="normal" fullWidth name="durationMinutes" label="Duration (minutes, optional)" type="number" id="durationMinutes" value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} InputProps={{ inputProps: { min: 0, step: "any" } }} />
@@ -271,8 +294,9 @@ export default function LogExercisePage() {
                 </Grid>
 
                 {/* AI Chat for Calorie Estimation Section */}
-                <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 400 /* Ensure a minimum height */ }}>
+                {/* CORRECTED GRID ITEM BELOW */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 400 }}>
                         <Typography variant="h6" gutterBottom textAlign="center">
                             Not sure how much you burned?
                         </Typography>
@@ -280,6 +304,7 @@ export default function LogExercisePage() {
                             Ask the coach!
                         </Typography>
 
+                        {/* ... (your AI chat UI and logic) ... */}
                         {isAiModelInitializing && (
                             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexGrow: 1 }}>
                                 <CircularProgress />
@@ -294,7 +319,7 @@ export default function LogExercisePage() {
 
                         {aiChatSession && !isAiModelInitializing && (
                             <>
-                                <List sx={{ flexGrow: 1, overflowY: 'auto', maxHeight: 300 /* Adjust as needed */, border: '1px solid', borderColor: 'divider', borderRadius: 1, p:1, mb:1 }}>
+                                <List sx={{ flexGrow: 1, overflowY: 'auto', maxHeight: 300 , border: '1px solid', borderColor: 'divider', borderRadius: 1, p:1, mb:1 }}>
                                     {aiChatHistory.map((msg) => (
                                         <ListItem key={msg.id} sx={{ justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start', px:0.5, py: 0.25 }}>
                                             <Paper
@@ -324,7 +349,7 @@ export default function LogExercisePage() {
                                         <Typography variant="caption" sx={{ml:1}}>AI is thinking...</Typography>
                                     </Box>
                                 )}
-                                <Box component="form" onSubmit={handleAiSendMessage} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 'auto' /* Pushes to bottom */ }}>
+                                <Box component="form" onSubmit={handleAiSendMessage} sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 'auto' }}>
                                     <TextField fullWidth variant="outlined" placeholder="e.g., 30 min jogging" value={aiInputMessage} onChange={(e) => setAiInputMessage(e.target.value)} size="small" disabled={isLoadingAiResponse || !aiChatSession} />
                                     <IconButton type="submit" color="primary" disabled={isLoadingAiResponse || !aiInputMessage.trim() || !aiChatSession}>
                                         <SendIcon />

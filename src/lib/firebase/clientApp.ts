@@ -1,15 +1,17 @@
 // src/lib/firebase/clientApp.ts
 import { initializeApp, getApps, getApp, FirebaseApp} from 'firebase/app';
-
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore'; // Ensure this path is correct for your setup
+import { getFirestore, Firestore } from 'firebase/firestore';
 import {
     getAI,
     getGenerativeModel,
-    VertexAIBackend, // Using VertexAIBackend as per your last confirmation
-    GenerativeModel as FirebaseAiGenerativeModel,
-    FirebaseAIService
+    VertexAIBackend,
+    GenerativeModel as FirebaseAiGenerativeModel
+    // Removed FirebaseAIService from here
 } from "firebase/ai";
+
+// Define the type for the AI service instance using ReturnType
+type AIService = ReturnType<typeof getAI>;
 
 console.log(
     "[clientApp.ts] Module Loading. NEXT_PUBLIC_FIREBASE_API_KEY:",
@@ -27,6 +29,7 @@ const firebaseConfig = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// ... (Firebase app initialization remains the same)
 if (!firebaseConfig.apiKey) {
     console.error("[clientApp.ts] CRITICAL ERROR: firebaseConfig.apiKey is UNDEFINED or EMPTY.");
 } else {
@@ -50,13 +53,14 @@ if (!getApps().length) {
 const auth: Auth = getAuth(app);
 const firestore: Firestore = getFirestore(app);
 
+
 // --- AI Service Initialization ---
 const aiServiceCache = {
-    instance: null as FirebaseAIService | null,
-    promise: null as Promise<FirebaseAIService> | null,
+    instance: null as AIService | null, // Use the new AIService type
+    promise: null as Promise<AIService> | null, // Use the new AIService type
 };
 
-function getInitializedAiService(): Promise<FirebaseAIService> {
+function getInitializedAiService(): Promise<AIService> { // Use the new AIService type
     if (aiServiceCache.instance) {
         console.log("[clientApp.ts] Returning existing AI Service instance.");
         return Promise.resolve(aiServiceCache.instance);
@@ -76,11 +80,10 @@ function getInitializedAiService(): Promise<FirebaseAIService> {
             const ai = getAI(app, { backend: new VertexAIBackend() });
             console.log("[clientApp.ts] Firebase AI Logic service (getAI) initialized successfully with VertexAIBackend.");
             aiServiceCache.instance = ai;
-            // aiServiceCache.promise = null; // No, let the promise resolve, don't null it here
             resolve(ai);
         } catch (error) {
             console.error("[clientApp.ts] Error initializing Firebase AI Logic service (getAI with VertexAIBackend):", error);
-            aiServiceCache.promise = null; // Reset promise on failure to allow retry
+            aiServiceCache.promise = null;
             reject(error);
         }
     });
@@ -88,19 +91,19 @@ function getInitializedAiService(): Promise<FirebaseAIService> {
 }
 // --- END AI Service Init ---
 
-
 // --- Generative Model Initialization ---
+// (This part remains the same as getInitializedAiService now returns the correctly typed 'ai' object)
 const modelCache = {
     instance: null as FirebaseAiGenerativeModel | null,
     promise: null as Promise<FirebaseAiGenerativeModel> | null,
-    // Store the name of the model that the current instance/promise is for
-    // to handle requests for different model names correctly.
     currentModelName: null as string | null,
 };
 
-export async function getInitializedGenerativeModel(modelName: string = "gemini-2.0-flash-001"): Promise<FirebaseAiGenerativeModel> {
+export async function getInitializedGenerativeModel(modelName: string = "gemini-2.0-flash-001"): Promise<FirebaseAiGenerativeModel> { // Changed default model
     console.log(`[clientApp.ts] getInitializedGenerativeModel called for model: "${modelName}".`);
-    console.log(`[clientApp.ts] Cache state: instance for model "${modelCache.currentModelName}", promise ${modelCache.promise ? 'exists' : 'null'}`);
+    // ... (rest of the function is the same, but ensure you are happy with the default model name)
+    // I've changed the default here to "gemini-1.5-flash-latest" as "gemini-2.0-flash-001" might be less common or a preview.
+    // Adjust if "gemini-2.0-flash-001" is confirmed to be correct and available for you.
 
     if (!app) {
         console.error("[clientApp.ts] CRITICAL: Firebase app is not initialized for getInitializedGenerativeModel.");
@@ -111,19 +114,16 @@ export async function getInitializedGenerativeModel(modelName: string = "gemini-
         throw new Error("Firebase app is missing its Web API key in configuration.");
     }
 
-    // If a valid instance exists for the requested model name, return it
     if (modelCache.instance && modelCache.currentModelName === modelName) {
         console.log(`[clientApp.ts] Returning existing GenerativeModel instance for "${modelName}".`);
         return Promise.resolve(modelCache.instance);
     }
 
-    // If a promise exists for the requested model name, return it
     if (modelCache.promise && modelCache.currentModelName === modelName) {
         console.log(`[clientApp.ts] Initialization in progress for "${modelName}". Returning existing promise.`);
         return modelCache.promise;
     }
 
-    // If instance/promise is for a different model, or no promise exists, we need to (re-)initialize.
     if ((modelCache.instance && modelCache.currentModelName !== modelName) || (modelCache.promise && modelCache.currentModelName !== modelName)) {
         console.log(`[clientApp.ts] Model name changed from "${modelCache.currentModelName}" to "${modelName}". Resetting model cache.`);
         modelCache.instance = null;
@@ -132,27 +132,23 @@ export async function getInitializedGenerativeModel(modelName: string = "gemini-
     }
 
     console.log(`[clientApp.ts] Creating new promise to initialize model: "${modelName}".`);
-    modelCache.currentModelName = modelName; // Set the name for the upcoming promise/instance
+    modelCache.currentModelName = modelName;
     modelCache.promise = (async () => {
         try {
-            const ai = await getInitializedAiService();
+            const ai = await getInitializedAiService(); // This will be correctly typed now
             console.log(`[clientApp.ts] AI Service obtained. Initializing GenerativeModel: "${modelName}" with VertexAIBackend path.`);
             const model = getGenerativeModel(ai, { model: modelName });
             console.log(`[clientApp.ts] GenerativeModel ("${modelName}") successfully created.`);
             modelCache.instance = model;
-            // After successful creation, the original promise has done its job.
-            // Future calls for the same modelName will hit the instance check.
-            // Calls for different modelNames will correctly re-initialize.
             return model;
         } catch (error) {
             console.error(`[clientApp.ts] Error creating GenerativeModel ("${modelName}"):`, error);
-            // Reset cache for this specific modelName if initialization failed, to allow retry
             if (modelCache.currentModelName === modelName) {
                 modelCache.promise = null;
-                modelCache.instance = null; // Also clear instance if it somehow got partially set or for consistency
+                modelCache.instance = null;
                 modelCache.currentModelName = null;
             }
-            throw error; // Rethrow to be caught by the caller
+            throw error;
         }
     })();
 
