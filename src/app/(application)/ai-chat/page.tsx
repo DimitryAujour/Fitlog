@@ -103,7 +103,7 @@ export default function AiChatPage() {
         const currentMessageText = inputMessage.trim();
 
         if (!currentMessageText || !chatSession || !user) {
-            // ... (your existing checks)
+            console.warn("Cannot send message: Missing text, chat session, or user.");
             return;
         }
 
@@ -117,41 +117,67 @@ export default function AiChatPage() {
         setInputMessage('');
         setIsLoadingAiResponse(true);
 
-        let fullPrompt = currentMessageText;
+        // Placeholder for the AI's response while it's being generated
+        const aiMessageId = `ai-${Date.now()}`; // Define it here to use in catch block if needed for placeholder
+        const aiPartialMessage: Message = {
+            id: aiMessageId,
+            text: '...',
+            sender: 'ai',
+            timestamp: new Date(),
+        };
+        setChatHistory(prev => [...prev, aiPartialMessage]);
 
         try {
+            // Fetch context data
             const userProfileData = await getUserProfileAndTargetsForAI(user.uid);
             const todaysLogSummary = await getDailyNutritionalSummaryForAI(user.uid);
 
             const contextStrings: string[] = [];
-            contextStrings.push("System: You are FitLog AI..."); // Keep your system prompt
+            // System Prompt (Customize as needed for the general chat page)
+            contextStrings.push("System: You are FitLog AI, a friendly and knowledgeable nutrition and fitness coach. Your goal is to provide supportive, evidence-based advice based on the user's profile, targets, and current day's intake. Avoid overly technical jargon unless necessary, and always prioritize safety and general wellness. Do not provide medical advice; suggest consulting a healthcare professional for medical concerns.");
 
+            // Add User Profile Context
             if (userProfileData) {
-                // ... (your profile context construction)
+                let profileContext = "User Profile & Targets Context:";
+                if (userProfileData.fitnessGoal) profileContext += `\n- Goal: ${userProfileData.fitnessGoal}`;
+                if (userProfileData.activityLevel) profileContext += `\n- Activity Level: ${userProfileData.activityLevel}`;
+                if (userProfileData.weightKg) profileContext += `\n- Weight: ${userProfileData.weightKg} kg`;
+                if (userProfileData.targetCalories) profileContext += `\n- Daily Calorie Target: ${userProfileData.targetCalories.toFixed(0)} kcal`;
+                if (userProfileData.targetProteinGrams) profileContext += `\n- Daily Protein Target: ${userProfileData.targetProteinGrams.toFixed(1)}g`;
+                if (userProfileData.targetCarbGrams) profileContext += `\n- Daily Carb Target: ${userProfileData.targetCarbGrams.toFixed(1)}g`;
+                if (userProfileData.targetFatGrams) profileContext += `\n- Daily Fat Target: ${userProfileData.targetFatGrams.toFixed(1)}g`;
+                contextStrings.push(profileContext);
+            } else {
+                contextStrings.push("User Profile Context: Not available.");
             }
 
+            // Add Today's Log Summary Context
             if (todaysLogSummary) {
-                // ... (your log summary context construction)
+                let summaryContext = "Today's Nutritional Summary:";
+                summaryContext += `\n- Calories from Food: ${todaysLogSummary.consumedCalories.toFixed(0)} kcal`;
+                summaryContext += `\n- Calories Burned (Exercise): ${todaysLogSummary.exerciseCaloriesBurned.toFixed(0)} kcal`;
+                summaryContext += `\n- Net Calories Consumed Today: ${todaysLogSummary.netCaloriesConsumed.toFixed(0)} kcal`;
+                if (userProfileData?.targetCalories) {
+                    const remainingCalories = userProfileData.targetCalories - todaysLogSummary.netCaloriesConsumed;
+                    summaryContext += `\n- Calories Remaining for Target: ${remainingCalories.toFixed(0)} kcal`;
+                }
+                summaryContext += `\n- Protein Consumed: ${todaysLogSummary.consumedProtein.toFixed(1)}g`;
+                summaryContext += `\n- Carbs Consumed: ${todaysLogSummary.consumedCarbs.toFixed(1)}g`;
+                summaryContext += `\n- Fat Consumed: ${todaysLogSummary.consumedFat.toFixed(1)}g`;
+                contextStrings.push(summaryContext);
+            } else {
+                contextStrings.push("Today's Nutritional Summary: Not available or no intake/exercise logged yet.");
             }
 
-            contextStrings.push(`User Query: ${currentMessageText}`);
-            contextStrings.push("Based on all the above information, provide a helpful response.");
+            contextStrings.push(`\nUser Query: ${currentMessageText}`);
+            contextStrings.push("\nBased on all the above information, provide a helpful and relevant response.");
 
-            fullPrompt = contextStrings.join('\n\n');
+            const fullPrompt = contextStrings.join('\n\n');
             console.log(`[ai-chat] Sending augmented prompt to AI: \n${fullPrompt}`);
 
             const result = await chatSession.sendMessageStream(fullPrompt);
 
             let aiResponseText = '';
-            const aiMessageId = `ai-${Date.now()}`;
-            const aiPartialMessage: Message = {
-                id: aiMessageId,
-                text: '...',
-                sender: 'ai',
-                timestamp: new Date(),
-            };
-            setChatHistory(prev => [...prev, aiPartialMessage]);
-
             for await (const item of result.stream) {
                 if (item.candidates && item.candidates.length > 0) {
                     const chunk = item.candidates[0]?.content?.parts?.[0]?.text;
@@ -167,10 +193,9 @@ export default function AiChatPage() {
             }
             console.log('Received streamed AI response:', aiResponseText);
 
-            // **FIXED PART HERE**
-            // Fallback if stream was empty but full response has content
             if (!aiResponseText) {
-                const fullResponseObject: EnhancedGenerateContentResponse = await result.response; // Await the promise
+                // Type casting here if you are sure of the type, or handle potential undefined
+                const fullResponseObject = await result.response as EnhancedGenerateContentResponse;
                 if (fullResponseObject.candidates && fullResponseObject.candidates.length > 0) {
                     const fullResponseTextFromPromise = fullResponseObject.candidates[0]?.content?.parts?.[0]?.text;
                     if (fullResponseTextFromPromise) {
@@ -183,7 +208,6 @@ export default function AiChatPage() {
                     }
                 }
             }
-
 
             if (!aiResponseText) {
                 console.warn("AI response text was empty after streaming and fallback.");
@@ -203,18 +227,20 @@ export default function AiChatPage() {
                 errorMessage += ` Details: ${error}`;
             }
             const errorResponseMessage: Message = {
-                id: `err-${Date.now()}`,
+                id: `err-${Date.now()}`, // Use a new ID for the error message itself
                 text: errorMessage,
                 sender: 'ai',
                 timestamp: new Date(),
             };
             setChatHistory(prev => {
-                const existingAiMessageIndex = prev.findIndex(msg => msg.id.startsWith('ai-') && msg.text === '...');
-                if (existingAiMessageIndex !== -1) {
+                // Try to replace the placeholder if it exists for this attempt
+                const placeholderIndex = prev.findIndex(m => m.id === aiMessageId && m.text === '...');
+                if (placeholderIndex !== -1) {
                     const updatedHistory = [...prev];
-                    updatedHistory[existingAiMessageIndex] = errorResponseMessage;
+                    updatedHistory[placeholderIndex] = errorResponseMessage;
                     return updatedHistory;
                 }
+                // Otherwise, just add the error message
                 return [...prev, errorResponseMessage];
             });
         } finally {
