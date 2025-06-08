@@ -1,27 +1,21 @@
-/* globals.css */
-@import "tailwindcss";
+/* src/app/globals.css */
+@tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --background: 249 250 252; /* Equivalent to #F9FAFC */
+  --foreground: 23 23 23; /* Equivalent to #171717 */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* This is the dark background from your login page */
+    --background: 13 11 20; /* Equivalent to #0D0B14 */
+    --foreground: 224 224 224; /* Equivalent to #E0E0E0 */
   }
 }
 
 body {
-  /* background: var(--background); */
-  /* color: var(--foreground); */  /* << COMMENT OUT OR DELETE THIS LINE */
-  /* font-family: Arial, Helvetica, sans-serif; */ /* << COMMENT OUT OR DELETE THIS */
+  /* These lines are now active */
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
 }

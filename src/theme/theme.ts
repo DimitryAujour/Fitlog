@@ -10,24 +10,15 @@ const roboto = Roboto({
     display: 'swap',
 });
 
+// This theme now exclusively defines a dark mode palette.
 const theme = createTheme({
-    // REMOVED: Properties like breakpoints, direction, mixins, shape, spacing,
-    // transitions, zIndex, etc., that were previously set to undefined.
-    // Let MUI handle their defaults.
-
-    // REMOVED or COMMENTED OUT: shadows array. Let MUI use default shadows for now.
-    // shadows: ["none", "", "", ...], // This was problematic
-
-    // This is a valid option if you need it
-    unstable_strictMode: false,
-
     palette: {
-        mode: 'light',
+        mode: 'dark', // This enforces dark mode for all MUI components
         primary: {
-            main: '#6A679E', // Your chosen primary color
+            main: '#7F7CBB', // A slightly lighter purple for good contrast on dark backgrounds
         },
         secondary: {
-            main: '#6ECDC2', // Your chosen secondary color
+            main: '#6ECDC2',
         },
         error: {
             main: '#f44336',
@@ -42,60 +33,39 @@ const theme = createTheme({
             main: '#66bb6a',
         },
         background: {
-            default: '#f4f6f8',
-            paper: '#ffffff',
+            default: '#0D0B14', // The main dark background for pages
+            paper: '#1A1629',   // The slightly lighter color for cards and paper elements
         },
         text: {
-            primary: '#3A3B3C',
-            secondary: '#6c757d',
+            primary: '#EAEAEA',
+            secondary: '#BDBDBD',
         },
-
+        divider: 'rgba(255, 255, 255, 0.12)', // A divider color that works on a dark background
     },
     typography: {
-        fontFamily: roboto.style.fontFamily, // Correctly using Next/Font
-        h1: {
-            fontSize: '2.5rem',
-            fontWeight: 500,
-            color: '#3A3B3C',
-        },
-        h2: {
-            fontSize: '2rem',
-            fontWeight: 500,
-            color: '#3A3B3C',
-        },
-        h3: {
-            fontSize: '1.75rem',
-            fontWeight: 500,
-            color: '#3A3B3C',
-        },
-        body1: {
-            color: '#3A3B3C',
-        },
-        body2: {
-            color: '#6c757d',
-        }
+        fontFamily: roboto.style.fontFamily,
+        // You can adjust typography colors here if needed, but they will inherit from the palette by default
+        h1: { fontSize: '2.5rem', fontWeight: 500, color: '#ffffff' },
+        h2: { fontSize: '2rem', fontWeight: 500, color: '#f5f5f5' },
+        h3: { fontSize: '1.75rem', fontWeight: 500, color: '#f5f5f5' },
+        body1: { color: '#EAEAEA' },
+        body2: { color: '#BDBDBD' }
     },
     components: {
-        MuiAppBar: {
-            // Example: If your AppBar uses primary color and feels too dark
-            // styleOverrides: {
-            //   colorPrimary: {
-            //     backgroundColor: '#7F7CBB',
-            //   },
-            // },
-        },
         MuiPaper: {
-            defaultProps: { // Corrected structure for defaultProps
-                elevation: 1,
+            defaultProps: {
+                elevation: 3,
             },
         },
-        // MuiButton: {
-        //   styleOverrides: {
-        //     root: {
-        //       borderRadius: 8,
-        //     },
-        //   },
-        // },
+        MuiAppBar: {
+            styleOverrides: {
+                // Example of setting a specific color for the AppBar if needed
+                // By default, it will use palette.background.paper
+                root: {
+                    backgroundColor: '#1A1629',
+                }
+            }
+        }
     }
 });
 
