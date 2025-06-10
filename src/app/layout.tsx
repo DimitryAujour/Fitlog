@@ -36,9 +36,11 @@ export default function RootLayout({
                 crossOrigin="anonymous"
                 strategy="afterInteractive"
             />
+            <meta name="google-adsense-account" content="ca-pub-3400469453529039"/>
+
         </head>
         <body>
-        <AppRouterCacheProvider options={{ enableCssLayer: true }}>
+        <AppRouterCacheProvider options={{enableCssLayer: true }}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
                 <AuthProvider>
