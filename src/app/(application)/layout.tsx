@@ -78,7 +78,7 @@ export default function ApplicationLayout({
     const drawerContent = (
         <Box onClick={handleDrawerToggle} sx={{ textAlign: 'center' }}>
             <Typography variant="h6" sx={{ my: 2 }}>
-                FitLog
+                Peak Zenit
             </Typography>
             <Divider />
             <List>
@@ -141,7 +141,7 @@ export default function ApplicationLayout({
                         <MenuIcon />
                     </IconButton>
                     <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-                        FitLog
+                        Peak Zenit
                     </Typography>
                     {/* You can add other AppBar items here, like a user avatar or name */}
                 </Toolbar>
