@@ -38,7 +38,7 @@ export default function HomePage() {
       >
         <CircularProgress />
         <Typography variant="h6" sx={{ mt: 2 }}>
-          Loading FitLog...
+          Loading Peak Zenit...
         </Typography>
       </Container>
   );
