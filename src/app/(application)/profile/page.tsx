@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import {
+    Avatar,
     Box, Button, Container, TextField, Typography, CircularProgress,
     Alert, Paper, Select, MenuItem, InputLabel, FormControl,
-    SelectChangeEvent // Import SelectChangeEvent
+    SelectChangeEvent
 } from '@mui/material';
 import { useAuth } from '@/context/AuthContext';
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp, FieldValue } from 'firebase/firestore'; // Import FieldValue
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp, FieldValue } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/clientApp';
-
 import {
     calculateAge,
     calculateBMR,
@@ -31,21 +31,19 @@ interface UserProfile {
     fitnessGoal?: string;
 }
 
-// More specific type for data being saved to Firestore
 interface ProfileDataToSave {
     displayName?: string;
     email?: string;
     photoURL?: string;
-    birthDate: Timestamp | null; // Stored as Timestamp or null
-    weightKg: number | null;     // Stored as number or null
-    heightCm: number | null;     // Stored as number or null
+    birthDate: Timestamp | null;
+    weightKg: number | null;
+    heightCm: number | null;
     gender?: string;
     activityLevel?: string;
     fitnessGoal?: string;
     updatedAt: FieldValue;
-    createdAt?: FieldValue; // Optional, only for new profiles
+    createdAt?: FieldValue;
 }
-
 
 const genderOptions = [
     { value: 'male', label: 'Male' },
@@ -66,7 +64,6 @@ const fitnessGoalOptions = [
     { value: 'maintenance', label: 'Maintenance' },
     { value: 'muscleGain', label: 'Muscle Gain' },
 ];
-
 
 export default function ProfilePage() {
     const { user, loading: authLoading } = useAuth();
@@ -105,15 +102,14 @@ export default function ProfilePage() {
                             displayName: data.displayName || user.displayName || '',
                             email: data.email || user.email || '',
                             photoURL: data.photoURL || user.photoURL || '',
-                            birthDate: data.birthDate && data.birthDate.toDate ? data.birthDate.toDate().toISOString().split('T')[0] : '',
-                            weightKg: data.weightKg !== undefined ? String(data.weightKg) : '', // Ensure string for input
-                            heightCm: data.heightCm !== undefined ? String(data.heightCm) : '', // Ensure string for input
+                            birthDate: data.birthDate?.toDate ? data.birthDate.toDate().toISOString().split('T')[0] : '',
+                            weightKg: data.weightKg !== undefined ? String(data.weightKg) : '',
+                            heightCm: data.heightCm !== undefined ? String(data.heightCm) : '',
                             gender: data.gender || '',
                             activityLevel: data.activityLevel || '',
                             fitnessGoal: data.fitnessGoal || '',
                         });
                     } else {
-                        console.log('No such profile document! Setting defaults from auth.');
                         setProfile(prev => ({
                             ...prev,
                             email: user.email || '',
@@ -123,11 +119,7 @@ export default function ProfilePage() {
                     }
                 } catch (err) {
                     console.error("Error fetching profile:", err);
-                    if (err instanceof Error) {
-                        setError(err.message || "Failed to fetch profile data.");
-                    } else {
-                        setError("An unknown error occurred while fetching profile data.");
-                    }
+                    setError(err instanceof Error ? err.message : "An unknown error occurred.");
                 } finally {
                     setIsLoading(false);
                 }
@@ -171,12 +163,11 @@ export default function ProfilePage() {
         }
     }, [profile]);
 
-    // Updated handleChange to be more type-specific for SelectChangeEvent
     const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>) => {
-        const target = event.target as { name: string; value: unknown }; // Value from Select is string
+        const { name, value } = event.target;
         setProfile(prevProfile => ({
             ...prevProfile,
-            [target.name]: target.value as string, // Ensure value is string
+            [name]: value,
         }));
     };
 
@@ -192,11 +183,9 @@ export default function ProfilePage() {
 
         const profileDocRef = doc(firestore, 'users', user.uid);
         try {
-            // Error 1: Unexpected any. Specify a different type.
-            // Use the more specific ProfileDataToSave interface
             const dataToSave: ProfileDataToSave = {
                 displayName: profile.displayName || '',
-                email: profile.email || user.email || '', // Ensure email is present
+                email: profile.email || user.email || '',
                 photoURL: profile.photoURL || '',
                 weightKg: profile.weightKg ? parseFloat(profile.weightKg as string) : null,
                 heightCm: profile.heightCm ? parseFloat(profile.heightCm as string) : null,
@@ -210,26 +199,19 @@ export default function ProfilePage() {
             const docSnap = await getDoc(profileDocRef);
             if (!docSnap.exists()) {
                 dataToSave.createdAt = serverTimestamp();
-                if (!dataToSave.email && user.email) { // Ensure email is saved for new profiles
-                    dataToSave.email = user.email;
-                }
             }
 
             await setDoc(profileDocRef, dataToSave, { merge: true });
             setSuccess("Profile updated successfully!");
-        } catch (err) { // Changed from catch (err: any)
+        } catch (err) {
             console.error("Error updating profile:", err);
-            if (err instanceof Error) {
-                setError(err.message || "Failed to update profile.");
-            } else {
-                setError("An unknown error occurred while updating profile.");
-            }
+            setError(err instanceof Error ? err.message : "Failed to update profile.");
         } finally {
             setIsLoading(false);
         }
     };
 
-    if (authLoading || (isLoading && !user) ) {
+    if (authLoading || (isLoading && !user)) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
                 <CircularProgress />
@@ -238,17 +220,32 @@ export default function ProfilePage() {
     }
 
     if (!user) {
-        return <Typography sx={{textAlign: 'center', mt: 5}}>Please log in to view your profile.</Typography>;
+        return <Typography sx={{ textAlign: 'center', mt: 5 }}>Please log in to view your profile.</Typography>;
     }
 
     return (
         <Container maxWidth="md">
+            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                <Avatar
+                    src={profile.photoURL || undefined}
+                    sx={{ width: 100, height: 100, fontSize: '3rem' }}
+                    // Add the 'imgProps' prop like this
+                    imgProps={{
+                        referrerPolicy: "no-referrer"
+                    }}
+                >
+                    {!profile.photoURL && profile.displayName ? profile.displayName.charAt(0).toUpperCase() : null}
+                </Avatar>
+            </Box>
+
             <Paper sx={{ my: 4, p: 3 }}>
-                <Typography variant="h4" component="h1" gutterBottom>
+                <Typography variant="h4" component="h1" gutterBottom sx={{ textAlign: 'center' }}>
                     Your Profile
                 </Typography>
+
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
                 {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
                 <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
                     <TextField
                         margin="normal"
@@ -301,19 +298,18 @@ export default function ProfilePage() {
                         id="birthDate"
                         value={profile.birthDate || ''}
                         onChange={handleChange}
-                        InputLabelProps={{ shrink: true }} // Date input label should always shrink
+                        InputLabelProps={{ shrink: true }}
                     />
 
-                    {/* Gender Select */}
                     <FormControl fullWidth margin="normal">
                         <InputLabel id="gender-label">Gender</InputLabel>
                         <Select
                             labelId="gender-label"
                             id="gender"
-                            name="gender" // Ensure Select components have a name attribute
+                            name="gender"
                             value={profile.gender || ''}
                             label="Gender"
-                            onChange={handleChange} // Removed 'as any'
+                            onChange={handleChange}
                         >
                             {genderOptions.map((option) => (
                                 <MenuItem key={option.value} value={option.value}>
@@ -323,16 +319,15 @@ export default function ProfilePage() {
                         </Select>
                     </FormControl>
 
-                    {/* Activity Level Select */}
                     <FormControl fullWidth margin="normal">
                         <InputLabel id="activityLevel-label">Activity Level</InputLabel>
                         <Select
                             labelId="activityLevel-label"
                             id="activityLevel"
-                            name="activityLevel" // Ensure Select components have a name attribute
+                            name="activityLevel"
                             value={profile.activityLevel || ''}
                             label="Activity Level"
-                            onChange={handleChange} // Removed 'as any'
+                            onChange={handleChange}
                         >
                             {activityLevelOptions.map((option) => (
                                 <MenuItem key={option.value} value={option.value}>
@@ -342,16 +337,15 @@ export default function ProfilePage() {
                         </Select>
                     </FormControl>
 
-                    {/* Fitness Goal Select */}
                     <FormControl fullWidth margin="normal">
                         <InputLabel id="fitnessGoal-label">Fitness Goal</InputLabel>
                         <Select
                             labelId="fitnessGoal-label"
                             id="fitnessGoal"
-                            name="fitnessGoal" // Ensure Select components have a name attribute
+                            name="fitnessGoal"
                             value={profile.fitnessGoal || ''}
                             label="Fitness Goal"
-                            onChange={handleChange} // Removed 'as any'
+                            onChange={handleChange}
                         >
                             {fitnessGoalOptions.map((option) => (
                                 <MenuItem key={option.value} value={option.value}>
@@ -372,7 +366,7 @@ export default function ProfilePage() {
                     </Button>
                 </Box>
             </Paper>
-            {/* Display Estimated Targets */}
+
             {bmr !== null && tdee !== null && calorieTargetInfo !== null && macroTargets !== null && calculatedAge !== null && (
                 <Paper sx={{ mt: 4, p: 3 }}>
                     <Typography variant="h5" component="h2" gutterBottom>

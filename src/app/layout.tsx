@@ -6,7 +6,8 @@ import CssBaseline from '@mui/material/CssBaseline';
 import theme from '../theme/theme';
 import { Roboto } from 'next/font/google';
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext"; // Import AuthProvider
+import { AuthProvider } from "@/context/AuthContext";
+import Script from 'next/script'; // 1. Import the Script component
 
 const roboto = Roboto({
     weight: ['300', '400', '500', '700'],
@@ -16,7 +17,7 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-    title: "FitLog App",
+    title: "Peak Zenit App",
     description: "Your AI-Powered Fitness Application",
 };
 
@@ -27,11 +28,19 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en" className={roboto.variable}>
-        <body className={roboto.className}>
+        <body>
+        {/* 2. Add the Script component here */}
+        <Script
+            async
+            src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3400469453529039"
+            crossOrigin="anonymous"
+            strategy="afterInteractive"
+        />
+
         <AppRouterCacheProvider options={{ enableCssLayer: true }}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <AuthProvider> {/* Wrap your children with AuthProvider */}
+                <AuthProvider>
                     {children}
                 </AuthProvider>
             </ThemeProvider>
