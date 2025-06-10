@@ -16,7 +16,7 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-    title: "FitLog App",
+    title: "Peak Zenit App",
     description: "Your AI-Powered Fitness Application",
 };
 
