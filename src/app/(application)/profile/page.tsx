@@ -5,11 +5,17 @@ import {
     Avatar,
     Box, Button, Container, TextField, Typography, CircularProgress,
     Alert, Paper, Select, MenuItem, InputLabel, FormControl,
-    SelectChangeEvent
+    SelectChangeEvent,
+    Card,
+    CardContent,
+    CardMedia,
+    Input,
+    Stack
 } from '@mui/material';
 import { useAuth } from '@/context/AuthContext';
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp, FieldValue } from 'firebase/firestore';
-import { firestore } from '@/lib/firebase/clientApp';
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp, FieldValue, updateDoc } from 'firebase/firestore';
+import {  ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { firestore, storage } from '@/lib/firebase/clientApp'; // Ensure storage is exported from clientApp
 import {
     calculateAge,
     calculateBMR,
@@ -19,6 +25,7 @@ import {
     FitnessGoal
 } from '@/lib/utils/fitnessCalculations';
 
+// --- Updated UserProfile interface ---
 interface UserProfile {
     displayName?: string;
     email?: string;
@@ -29,6 +36,7 @@ interface UserProfile {
     gender?: string;
     activityLevel?: string;
     fitnessGoal?: string;
+    backgroundURL?: string; // Add backgroundURL
 }
 
 interface ProfileDataToSave {
@@ -77,10 +85,16 @@ export default function ProfilePage() {
         gender: '',
         activityLevel: '',
         fitnessGoal: '',
+        backgroundURL: '', // Initialize backgroundURL
     });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+
+    // --- New State for background upload ---
+    const [newBackgroundFile, setNewBackgroundFile] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+
 
     const [calculatedAge, setCalculatedAge] = useState<number | null>(null);
     const [bmr, setBmr] = useState<number | null>(null);
@@ -108,6 +122,7 @@ export default function ProfilePage() {
                             gender: data.gender || '',
                             activityLevel: data.activityLevel || '',
                             fitnessGoal: data.fitnessGoal || '',
+                            backgroundURL: data.backgroundURL || '', // Fetch backgroundURL
                         });
                     } else {
                         setProfile(prev => ({
@@ -211,6 +226,43 @@ export default function ProfilePage() {
         }
     };
 
+    // --- New handler functions for background upload ---
+    const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files[0]) {
+            setNewBackgroundFile(event.target.files[0]);
+        }
+    };
+
+    const handleBackgroundUpload = async () => {
+        if (!newBackgroundFile || !user) {
+            setError("Please select a file to upload.");
+            return;
+        }
+        setIsUploading(true);
+        setError(null);
+        setSuccess(null);
+
+        const filePath = `backgrounds/${user.uid}/background`;
+        const storageRef = ref(storage, filePath);
+
+        try {
+            const snapshot = await uploadBytes(storageRef, newBackgroundFile);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            const profileDocRef = doc(firestore, 'users', user.uid);
+            await updateDoc(profileDocRef, {
+                backgroundURL: downloadURL
+            });
+            setProfile(prev => ({ ...prev, backgroundURL: downloadURL }));
+            setNewBackgroundFile(null);
+            setSuccess("Background updated successfully!");
+        } catch (err) {
+            console.error("Error uploading background:", err);
+            setError("Failed to upload background. Please try again.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
     if (authLoading || (isLoading && !user)) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -229,10 +281,7 @@ export default function ProfilePage() {
                 <Avatar
                     src={profile.photoURL || undefined}
                     sx={{ width: 100, height: 100, fontSize: '3rem' }}
-                    // Add the 'imgProps' prop like this
-                    imgProps={{
-                        referrerPolicy: "no-referrer"
-                    }}
+                    imgProps={{ referrerPolicy: "no-referrer" }}
                 >
                     {!profile.photoURL && profile.displayName ? profile.displayName.charAt(0).toUpperCase() : null}
                 </Avatar>
@@ -365,6 +414,39 @@ export default function ProfilePage() {
                         {(isLoading || authLoading) ? <CircularProgress size={24} /> : 'Save Profile'}
                     </Button>
                 </Box>
+            </Paper>
+
+            {/* --- New Section for Background Customization --- */}
+            <Paper sx={{ mt: 4, p: 3 }}>
+                <Typography variant="h5" component="h2" gutterBottom>
+                    Customize Background
+                </Typography>
+                <Card>
+                    <CardMedia
+                        component="img"
+                        height="180"
+                        image={newBackgroundFile ? URL.createObjectURL(newBackgroundFile) : profile.backgroundURL || '/default-background.jpg'}
+                        alt="Background preview"
+                    />
+                    <CardContent>
+                        <Typography variant="body2" color="text.secondary">
+                            Upload a new background image for your dashboard. For best results, use a high-resolution landscape image.
+                        </Typography>
+                        <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+                            <Button variant="outlined" component="label">
+                                Choose Image
+                                <Input type="file" hidden accept="image/*" onChange={handleFileSelect} />
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={handleBackgroundUpload}
+                                disabled={!newBackgroundFile || isUploading}
+                            >
+                                {isUploading ? <CircularProgress size={24} /> : 'Upload & Save'}
+                            </Button>
+                        </Stack>
+                    </CardContent>
+                </Card>
             </Paper>
 
             {bmr !== null && tdee !== null && calorieTargetInfo !== null && macroTargets !== null && calculatedAge !== null && (

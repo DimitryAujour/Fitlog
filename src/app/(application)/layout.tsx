@@ -1,7 +1,7 @@
-// src/app/(application)/layout.tsx
 'use client';
 
 import React, { useState } from 'react';
+
 import {
     Box,
     AppBar,
@@ -21,16 +21,17 @@ import MenuIcon from '@mui/icons-material/Menu';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ChatIcon from '@mui/icons-material/Chat';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu'; // Food Log
+import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
+import KitchenIcon from '@mui/icons-material/Kitchen';
 import NextLink from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext'; // To potentially show user info or logout
+import { useAuth } from '@/context/AuthContext'; // Updated context hook
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/clientApp';
 import LogoutIcon from '@mui/icons-material/Logout';
-
+import Script from "next/script";
 
 const DRAWER_WIDTH = 240;
 
@@ -40,14 +41,13 @@ interface NavItem {
     icon: React.ReactElement;
 }
 
-// Define your navigation items here
 const mainNavItems: NavItem[] = [
     { text: 'Dashboard', href: '/dashboard', icon: <DashboardIcon /> },
     { text: 'AI Coach', href: '/ai-chat', icon: <ChatIcon /> },
+    { text: 'Fridge', href: '/fridge', icon: <KitchenIcon /> },
     { text: 'Log Food', href: '/log/food', icon: <RestaurantMenuIcon /> },
-    { text: 'Log Exercise', href: '/log/exercise', icon: <FitnessCenterIcon /> }, // New item
+    { text: 'Log Exercise', href: '/log/exercise', icon: <FitnessCenterIcon /> },
 ];
-
 const userNavItems: NavItem[] = [
     { text: 'Profile', href: '/profile', icon: <AccountCircleIcon /> },
 ];
@@ -57,7 +57,8 @@ export default function ApplicationLayout({
                                           }: {
     children: React.ReactNode;
 }) {
-    const { user } = useAuth(); // Get user for display or conditional rendering
+    // --- Updated: Destructure userProfile from useAuth ---
+    const { user, userProfile } = useAuth();
     const router = useRouter();
     const [mobileOpen, setMobileOpen] = useState(false);
     const pathname = usePathname();
@@ -69,7 +70,7 @@ export default function ApplicationLayout({
     const handleLogout = async () => {
         try {
             await signOut(auth);
-            router.push('/login'); // Redirect to login after logout
+            router.push('/login');
         } catch (error) {
             console.error('Logout error:', error);
         }
@@ -89,7 +90,7 @@ export default function ApplicationLayout({
                             href={item.href}
                             selected={pathname === item.href}
                         >
-                            <ListItemIcon sx={{minWidth: 'auto', mr: 1.5}}>{item.icon}</ListItemIcon>
+                            <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>{item.icon}</ListItemIcon>
                             <ListItemText primary={item.text} />
                         </ListItemButton>
                     </ListItem>
@@ -104,7 +105,7 @@ export default function ApplicationLayout({
                             href={item.href}
                             selected={pathname === item.href}
                         >
-                            <ListItemIcon sx={{minWidth: 'auto', mr: 1.5}}>{item.icon}</ListItemIcon>
+                            <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}>{item.icon}</ListItemIcon>
                             <ListItemText primary={item.text} />
                         </ListItemButton>
                     </ListItem>
@@ -112,7 +113,7 @@ export default function ApplicationLayout({
                 {user && (
                     <ListItem disablePadding>
                         <ListItemButton onClick={handleLogout}>
-                            <ListItemIcon sx={{minWidth: 'auto', mr: 1.5}}><LogoutIcon /></ListItemIcon>
+                            <ListItemIcon sx={{ minWidth: 'auto', mr: 1.5 }}><LogoutIcon /></ListItemIcon>
                             <ListItemText primary="Logout" />
                         </ListItemButton>
                     </ListItem>
@@ -121,63 +122,99 @@ export default function ApplicationLayout({
         </Box>
     );
 
+    const ADSENSE_PUBLISHER_ID = "ca-pub-3400469453529039";
+
     return (
-        <Box sx={{ display: 'flex' }}>
-            <CssBaseline /> {/* Ensures consistent baseline styling */}
-            <AppBar
-                position="fixed"
-                sx={{
-                    zIndex: (theme) => theme.zIndex.drawer + 1,
-                }}
-            >
-                <Toolbar>
-                    <IconButton
-                        color="inherit"
-                        aria-label="open drawer"
-                        edge="start"
-                        onClick={handleDrawerToggle}
-                        sx={{ mr: 2 }} // Removed sx={{ mr: 2, display: { sm: 'none' } }} to always show
-                    >
-                        <MenuIcon />
-                    </IconButton>
-                    <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-                        Peak Zenit
-                    </Typography>
-                    {/* You can add other AppBar items here, like a user avatar or name */}
-                </Toolbar>
-            </AppBar>
-            <Drawer
-                variant="temporary" // "temporary" is good for a hamburger menu on all screen sizes
-                // or you can make it "permanent" or "persistent" on larger screens
-                // and "temporary" on smaller ones using MUI's `useMediaQuery` hook.
-                open={mobileOpen}
-                onClose={handleDrawerToggle}
-                ModalProps={{
-                    keepMounted: true, // Better open performance on mobile.
-                }}
-                sx={{
-                    '& .MuiDrawer-paper': { boxSizing: 'border-box', width: DRAWER_WIDTH },
-                }}
-            >
-                {drawerContent}
-            </Drawer>
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    p: 3,
-                    marginTop: '64px', // AppBar default height on desktop
-                    '@media (max-width:599.95px)': { // AppBar height on mobile xs
-                        marginTop: '56px',
-                    },
-                    '@media (min-width:600px) and (max-height:480px) and (orientation: landscape)': { // AppBar height on mobile sm landscape
-                        marginTop: '48px',
-                    }
-                }}
-            >
-                {/* The actual page content will be rendered here */}
-                {children}
+        <>
+            <Script
+                async
+                src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_PUBLISHER_ID}`}
+                crossOrigin="anonymous"
+                strategy="lazyOnload"
+            />
+
+            <Box sx={{ display: 'flex' }}>
+                <CssBaseline />
+
+                {/* --- New: Dynamic Background Box --- */}
+                <Box
+                    sx={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        zIndex: -1,
+                        backgroundImage: `url(${userProfile?.backgroundURL || ''})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        transition: 'background-image 0.5s ease-in-out',
+                        '&::after': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(13, 11, 20, 0.15)', // Your theme's dark color with opacity
+                            backdropFilter: 'blur(3px)',
+                        },
+                    }}
+                />
+
+                <AppBar
+                    position="fixed"
+                    sx={{
+                        zIndex: (theme) => theme.zIndex.drawer + 1,
+                    }}
+                >
+                    <Toolbar>
+                        <IconButton
+                            color="inherit"
+                            aria-label="open drawer"
+                            edge="start"
+                            onClick={handleDrawerToggle}
+                            sx={{ mr: 2 }}
+                        >
+                            <MenuIcon />
+                        </IconButton>
+                        <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+                            Peak Zenit
+                        </Typography>
+                    </Toolbar>
+                </AppBar>
+
+                <Drawer
+                    variant="temporary"
+                    open={mobileOpen}
+                    onClose={handleDrawerToggle}
+                    ModalProps={{
+                        keepMounted: true,
+                    }}
+                    sx={{
+                        '& .MuiDrawer-paper': { boxSizing: 'border-box', width: DRAWER_WIDTH },
+                    }}
+                >
+                    {drawerContent}
+                </Drawer>
+
+                <Box
+                    component="main"
+                    sx={{
+                        flexGrow: 1,
+                        p: 3,
+                        marginTop: '64px',
+                        '@media (max-width:599.95px)': {
+                            marginTop: '56px',
+                        },
+                        '@media (min-width:600px) and (max-height:480px) and (orientation: landscape)': {
+                            marginTop: '48px',
+                        }
+                    }}
+                >
+                    {children}
+                </Box>
             </Box>
-        </Box>
+        </>
     );
 }

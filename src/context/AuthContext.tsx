@@ -1,18 +1,25 @@
-// src/context/AuthContext.tsx
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase/clientApp'; // Your Firebase auth instance
-import { Box, CircularProgress } from '@mui/material'; // For a loading indicator
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, firestore } from '@/lib/firebase/clientApp';
+import { Box, CircularProgress } from '@mui/material';
 
-interface AuthContextType {
-    user: User | null;
-    loading: boolean;
-    // You can add more auth-related states or functions here later, like error states
+// --- New: Define the shape of the user profile data ---
+interface UserProfileData {
+    displayName?: string;
+    backgroundURL?: string;
+    // Add any other fields from the user's profile you want to access globally
 }
 
-// Create the context with a default undefined value to prevent direct usage without a provider
+// --- Updated: Add userProfile to the context type ---
+interface AuthContextType {
+    user: User | null;
+    userProfile: UserProfileData | null; // <-- Added
+    loading: boolean;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
@@ -21,21 +28,53 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
     const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true); // Start with loading true
+    // --- New: State for the user's profile data from Firestore ---
+    const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Subscribe to user state changes
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        // This function will be called when the user's auth state changes
+        const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser);
-            setLoading(false);
             console.log('Auth state changed, current user:', currentUser?.email);
+
+            // If a user is logged in, listen for their profile changes in real-time
+            if (currentUser) {
+                const profileDocRef = doc(firestore, 'users', currentUser.uid);
+
+                // onSnapshot returns its own unsubscribe function
+                const unsubscribeProfile = onSnapshot(profileDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        // If the document exists, update the userProfile state
+                        setUserProfile(docSnap.data() as UserProfileData);
+                    } else {
+                        // Handle case where user is authenticated but has no profile document yet
+                        console.log("No profile document found for user.");
+                        setUserProfile(null);
+                    }
+                    setLoading(false); // Auth and profile check is complete
+                });
+
+                // Return the profile listener's unsubscribe function to be called on cleanup
+                return () => {
+                    console.log("Cleaning up profile listener.");
+                    unsubscribeProfile();
+                };
+
+            } else {
+                // If no user is logged in, clear the profile and stop loading
+                setUserProfile(null);
+                setLoading(false);
+            }
         });
 
-        // Cleanup subscription on unmount
-        return () => unsubscribe();
-    }, []); // Empty dependency array ensures this runs once on mount
+        // Cleanup the main auth subscription on component unmount
+        return () => {
+            console.log("Cleaning up auth listener.");
+            unsubscribeAuth();
+        };
+    }, []);
 
-    // Show a loading indicator while checking auth state
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -45,13 +84,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
 
     return (
-        <AuthContext.Provider value={{ user, loading }}>
+        // --- Updated: Provide the new userProfile state to the rest of the app ---
+        <AuthContext.Provider value={{ user, userProfile, loading }}>
             {children}
         </AuthContext.Provider>
     );
 };
 
-// Custom hook to use the AuthContext
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (context === undefined) {

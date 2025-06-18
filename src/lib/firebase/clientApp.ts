@@ -9,6 +9,7 @@ import {
     GenerativeModel as FirebaseAiGenerativeModel
     // Removed FirebaseAIService from here
 } from "firebase/ai";
+import {FirebaseStorage, getStorage} from "@firebase/storage";
 
 // Define the type for the AI service instance using ReturnType
 type AIService = ReturnType<typeof getAI>;
@@ -52,6 +53,7 @@ if (!getApps().length) {
 
 const auth: Auth = getAuth(app);
 const firestore: Firestore = getFirestore(app);
+const storage: FirebaseStorage = getStorage(app);
 
 
 // --- AI Service Initialization ---
@@ -156,4 +158,4 @@ export async function getInitializedGenerativeModel(modelName: string = "gemini-
 }
 // --- END Generative Model Init ---
 
-export { app, auth, firestore };
+export { app, auth, firestore, storage };

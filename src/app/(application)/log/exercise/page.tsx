@@ -1,7 +1,7 @@
 // src/app/(application)/log/exercise/page.tsx
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Box, Button, Container, TextField, Typography, List, ListItemButton,
     ListItemText, CircularProgress, Alert, Paper, Stack, Grid,
@@ -11,6 +11,10 @@ import { useAuth } from '@/context/AuthContext';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/clientApp';
 
+// --- AI Imports ---
+import { getInitializedGenerativeModel } from '@/lib/firebase/clientApp';
+import type { GenerativeModel, ChatSession } from 'firebase/ai';
+
 // --- ICONS ---
 import SearchIcon from '@mui/icons-material/Search';
 import SendIcon from '@mui/icons-material/Send';
@@ -19,7 +23,7 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import TimerIcon from '@mui/icons-material/Timer';
 
-// --- INTERFACES ---
+// --- INTERFACES & MOCK DATA ---
 interface Exercise {
     id: string;
     name: string;
@@ -39,7 +43,6 @@ interface UserProfile {
     // other profile fields
 }
 
-// --- MOCK DATA (Replace with your API) ---
 const mockExercises: Exercise[] = [
     { id: '1', name: 'Running (jogging), 5 mph', metValue: 8.0, category: 'Cardio' },
     { id: '2', name: 'Weight lifting, vigorous', metValue: 6.0, category: 'Strength' },
@@ -61,14 +64,16 @@ export default function ExerciseLogPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<Exercise[]>([]);
     const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-    const [duration, setDuration] = useState('30'); // in minutes
+    const [duration, setDuration] = useState('30');
     const [caloriesBurned, setCaloriesBurned] = useState<number | null>(null);
     const [logDate, setLogDate] = useState<string>(new Date().toISOString().split('T')[0]);
     // Chat State
     const [messages, setMessages] = useState<ChatMessage[]>([
-        { id: 'init', text: "Hello! I'm your AI workout coach. Ask me for exercise suggestions, like 'What's a good 15-minute cardio workout?'", sender: 'ai' }
+        { id: 'init', text: "Hello! I'm your AI workout coach. Ask me for exercise suggestions, or about general fitness.", sender: 'ai' }
     ]);
     const [userInput, setUserInput] = useState('');
+    const [model, setModel] = useState<GenerativeModel | null>(null);
+    const [chatSession, setChatSession] = useState<ChatSession | null>(null);
     // Global State
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -76,35 +81,43 @@ export default function ExerciseLogPage() {
     const chatEndRef = useRef<null | HTMLDivElement>(null);
 
     // --- EFFECTS ---
-    useEffect(() => {
-        // Fetch user profile to get weight for calorie calculation
-        const fetchUserProfile = async () => {
-            if (user) {
-                const profileDocRef = doc(firestore, 'users', user.uid);
-                const docSnap = await getDoc(profileDocRef);
-                if (docSnap.exists()) {
-                    setUserProfile(docSnap.data() as UserProfile);
-                }
+    const fetchUserProfile = useCallback(async () => {
+        if (user) {
+            const profileDocRef = doc(firestore, 'users', user.uid);
+            const docSnap = await getDoc(profileDocRef);
+            if (docSnap.exists()) {
+                setUserProfile(docSnap.data() as UserProfile);
             }
-        };
-        fetchUserProfile();
+        }
     }, [user]);
 
     useEffect(() => {
-        // Calculate calories burned whenever duration or exercise changes
+        fetchUserProfile();
+        if (user) {
+            getInitializedGenerativeModel()
+                .then(initializedModel => {
+                    setModel(initializedModel);
+                    console.log(model)
+                    setChatSession(initializedModel.startChat());
+                })
+                .catch(err => console.error("AI Model Initialization Error:", err));
+        }
+    }, [user, fetchUserProfile]);
+
+
+    useEffect(() => {
         if (selectedExercise && duration && userProfile?.weightKg) {
             const weight = parseFloat(userProfile.weightKg as string);
             const durationInHours = parseFloat(duration) / 60;
             if (weight > 0 && durationInHours > 0) {
                 const calculatedCalories = selectedExercise.metValue * weight * durationInHours;
                 setCaloriesBurned(calculatedCalories);
-                if (activeStep === 1) setActiveStep(2); // Auto-advance
+                if (activeStep === 1) setActiveStep(2);
             }
         }
     }, [selectedExercise, duration, userProfile, activeStep]);
 
     useEffect(() => {
-        // Auto-scroll chat
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
@@ -117,7 +130,7 @@ export default function ExerciseLogPage() {
 
     const handleSearch = () => {
         if (!searchQuery.trim()) {
-            setSearchResults(mockExercises); // Show all if search is empty
+            setSearchResults(mockExercises);
             return;
         }
         const results = mockExercises.filter(ex =>
@@ -154,24 +167,64 @@ export default function ExerciseLogPage() {
         }
     };
 
-    const handleSendMessage = () => {
-        if (!userInput.trim()) return;
-        const newUserMessage: ChatMessage = { id: Date.now().toString(), text: userInput, sender: 'user' };
+    const handleSendMessage = async () => {
+        if (!userInput.trim() || !chatSession) return;
+
+        const currentMessageText = userInput.trim();
+        const newUserMessage: ChatMessage = { id: Date.now().toString(), text: currentMessageText, sender: 'user' };
         setMessages(prev => [...prev, newUserMessage]);
         setUserInput('');
         setIsLoading(true);
 
-        // Simulate AI response
-        setTimeout(() => {
-            const aiResponse: ChatMessage = {
-                id: (Date.now() + 1).toString(),
-                text: "Great question! Based on that, I'd suggest 'Running (jogging), 5 mph'. It's excellent for cardio.",
-                sender: 'ai',
-                suggestions: ['Running (jogging), 5 mph']
-            };
-            setMessages(prev => [...prev, aiResponse]);
+        try {
+            // Give the AI a list of available exercises so it can make specific, loggable suggestions
+            const availableExercises = mockExercises.map(ex => ex.name).join('; ');
+            const systemPrompt = `You are FitLog AI Coach, a helpful assistant on the exercise logging page. Your primary purpose is to help users estimate calories burned for specific exercises. You can also answer general questions about fitness and workouts.
+            
+            Here is a list of specific exercises the user can log directly: [${availableExercises}].
+            
+            When you suggest one of these specific exercises in your response, please enclose its full, exact name in triple backticks, like this: \`\`\`Running (jogging), 5 mph\`\`\`. This allows the user to log it with one click. You can suggest multiple exercises this way.`;
+
+            let fullPrompt = systemPrompt;
+            if (userProfile?.weightKg) {
+                fullPrompt += `\n\nThe user's weight is ${userProfile.weightKg} kg, use this for any calorie estimations.`;
+            }
+            fullPrompt += `\n\nUser's question: "${currentMessageText}"`;
+
+            const result = await chatSession.sendMessageStream(fullPrompt);
+            let aiResponseText = '';
+            const aiMessageId = `ai-${Date.now()}`;
+
+            for await (const item of result.stream) {
+                const chunk = item.text();
+                aiResponseText += chunk;
+                // Update message as it streams in
+                setMessages(prev => {
+                    const lastMessage = prev.find(msg => msg.id === aiMessageId);
+                    if (lastMessage) {
+                        return prev.map(msg => msg.id === aiMessageId ? { ...msg, text: aiResponseText } : msg);
+                    } else {
+                        return [...prev, { id: aiMessageId, text: aiResponseText, sender: 'ai' }];
+                    }
+                });
+            }
+
+            // After streaming is complete, parse for suggestions
+            const suggestions = aiResponseText.match(/```(.*?)```/g)?.map(s => s.replace(/```/g, '')) || [];
+
+            // Final update with suggestions
+            setMessages(prev =>
+                prev.map(msg =>
+                    msg.id === aiMessageId ? { ...msg, suggestions } : msg
+                )
+            );
+
+        } catch (error) {
+            console.error('AI Chat Error:', error);
+            setMessages(prev => [...prev, { id: `err-${Date.now()}`, text: "Sorry, I'm having trouble connecting right now.", sender: 'ai' }]);
+        } finally {
             setIsLoading(false);
-        }, 1500);
+        }
     };
 
     const handleSuggestionSelect = (exerciseName: string) => {
@@ -193,18 +246,12 @@ export default function ExerciseLogPage() {
     };
 
     // --- STYLES ---
-    const darkPaperStyles = {
-        backgroundColor: '#1A1629', color: '#E0E0E0', borderRadius: 3,
-        border: '1px solid', borderColor: 'rgba(255, 255, 255, 0.12)',
-    };
-    const darkInputStyles = {
-        '& .MuiInputBase-root': { backgroundColor: 'rgba(255, 255, 255, 0.08)' },
-        '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.23)' } },
-        '& .MuiInputLabel-root': { color: 'grey.400' },
-    };
+    const darkPaperStyles = { /* ... as you had before ... */ };
+    const darkInputStyles = { /* ... as you had before ... */ };
 
+    // --- RENDER LOGIC ---
     return (
-        <Box sx={{ backgroundColor: '#0D0B14', minHeight: 'calc(100vh - 64px)', p: {xs: 2, md: 4} }}>
+        <Box sx={{ minHeight: 'calc(100vh - 64px)', p: {xs: 2, md: 4} }}>
             <Container maxWidth="md">
                 <Typography variant="h4" component="h1" gutterBottom sx={{ color: '#fff', mb: 4, textAlign: 'center' }}>
                     Log Your Workout
@@ -216,15 +263,14 @@ export default function ExerciseLogPage() {
                         <Tab icon={<SmartToyIcon />} iconPosition="start" label="AI Coach" value="coach" />
                     </Tabs>
 
-                    {/* --- LOG WORKOUT PANEL --- */}
+                    {/* The rest of your JSX for the Log Workout and AI Coach panels remains the same */}
+                    {/* ... Your Stepper, Forms, and Chat UI ... */}
                     <Box role="tabpanel" hidden={currentTab !== 'log'} sx={{ p: { xs: 1, sm: 3 }, mt: 2 }}>
                         <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4, '& .MuiStepLabel-label': { color: 'grey.400', '&.Mui-active': { color: 'primary.main' }, '&.Mui-completed': { color: 'white' } } }}>
                             {steps.map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
                         </Stepper>
-
                         {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
                         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
                         {activeStep === 0 && (
                             <Stack spacing={2}>
                                 <TextField label="Search for an exercise..." variant="outlined" value={searchQuery} onChange={(e) => {setSearchQuery(e.target.value); handleSearch()}} sx={darkInputStyles} InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon sx={{color: 'grey.400'}} /></InputAdornment>)}} />
@@ -239,7 +285,6 @@ export default function ExerciseLogPage() {
                                 </Box>
                             </Stack>
                         )}
-
                         {activeStep > 0 && selectedExercise && (
                             <Stack spacing={4}>
                                 <Box>
@@ -262,8 +307,6 @@ export default function ExerciseLogPage() {
                             </Stack>
                         )}
                     </Box>
-
-                    {/* --- AI COACH PANEL --- */}
                     <Box role="tabpanel" hidden={currentTab !== 'coach'} sx={{ p: { xs: 0, sm: 2 }, mt: 2 }}>
                         <Box sx={{ height: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', p: 2 }}>
                             {messages.map(msg => (
@@ -286,7 +329,7 @@ export default function ExerciseLogPage() {
                         </Box>
                         <Stack direction="row" spacing={1} sx={{ p: 2, borderTop: '1px solid', borderColor: 'rgba(255,255,255,0.12)' }}>
                             <TextField fullWidth placeholder="Ask for a workout..." value={userInput} onChange={e => setUserInput(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSendMessage()} sx={darkInputStyles} />
-                            <IconButton color="primary" onClick={handleSendMessage} disabled={!userInput.trim() || isLoading}><SendIcon /></IconButton>
+                            <IconButton color="primary" onClick={() => handleSendMessage()} disabled={!userInput.trim() || isLoading}><SendIcon /></IconButton>
                         </Stack>
                     </Box>
                 </Paper>

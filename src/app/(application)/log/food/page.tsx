@@ -170,7 +170,7 @@ export default function FoodLogPage() {
     };
 
     return (
-        <Box sx={{ backgroundColor: '#0D0B14', minHeight: 'calc(100vh - 64px)', p: {xs: 2, md: 4} }}>
+        <Box sx={{  minHeight: 'calc(100vh - 64px)', p: {xs: 2, md: 4} }}>
             <Container maxWidth="md">
                 <Typography variant="h4" component="h1" gutterBottom sx={{ color: '#fff', mb: 4, textAlign: 'center' }}>
                     Log Your Meal

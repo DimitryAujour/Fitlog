@@ -1,5 +1,5 @@
 // src/lib/aiContextHelper.ts
-import { doc, getDoc, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import {doc, getDoc, collection, query, where, getDocs, Timestamp, orderBy} from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/clientApp';
 import {
     calculateAge,
@@ -30,6 +30,14 @@ export interface AiContextDailySummary { // Renamed for clarity
     netCaloriesConsumed: number; // New field: consumedCalories - exerciseCaloriesBurned
 }
 
+interface FridgeItem {
+    id: string; // Firestore document ID
+    userId: string;
+    foodName: string;
+    foodApiId: string;
+    brand?: string;
+    addedAt: Timestamp; // Firestore Timestamp
+}
 // getUserProfileAndTargetsForAI can remain largely the same, but ensure it fetches weightKg if AI might use it
 export async function getUserProfileAndTargetsForAI(userId: string): Promise<AiContextUserProfile | null> {
     if (!userId) return null;
@@ -129,4 +137,29 @@ export async function getDailyNutritionalSummaryForAI(userId: string): Promise<A
         console.error("[aiContextHelper] Error fetching daily nutritional summary for AI:", error);
     }
     return summary;
+}
+export async function getFridgeItemsForAI(userId: string): Promise<string[]> {
+    if (!userId) return [];
+
+    const fridgeItems: string[] = [];
+    try {
+        // CORRECTED THIS LINE: Replaced 'user.id' with 'userId'
+        const fridgeCollectionRef = collection(firestore, 'users', userId, 'fridgeItems');
+
+        // Optional: order by when they were added
+        const q = query(fridgeCollectionRef, orderBy('addedAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+
+        querySnapshot.forEach((doc) => {
+            const item = doc.data() as FridgeItem; // Your FridgeItem interface
+            if (item.foodName) {
+                fridgeItems.push(item.foodName);
+            }
+        });
+        console.log("[aiContextHelper] Fetched fridge items for AI:", fridgeItems);
+        return fridgeItems;
+    } catch (err) {
+        console.error("Error fetching fridge items for AI:", err);
+        return []; // Return an empty array on error
+    }
 }

@@ -1,7 +1,7 @@
 // src/app/(application)/ai-chat/page.tsx
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Box, Container, Paper, TextField, Typography, CircularProgress,
     IconButton, Stack, Avatar, Accordion, AccordionSummary,
@@ -12,7 +12,8 @@ import { useRouter } from 'next/navigation';
 import { getInitializedGenerativeModel } from '@/lib/firebase/clientApp';
 import type { GenerativeModel, ChatSession } from 'firebase/ai';
 
-import { getUserProfileAndTargetsForAI, getDailyNutritionalSummaryForAI } from '@/lib/aiContextHelper';
+// UPDATE THIS IMPORT
+import { getUserProfileAndTargetsForAI, getDailyNutritionalSummaryForAI, getFridgeItemsForAI } from '@/lib/aiContextHelper';
 import type { AiContextUserProfile, AiContextDailySummary } from '@/lib/aiContextHelper';
 
 // --- ICONS ---
@@ -28,12 +29,18 @@ interface Message {
     text: string;
     sender: 'user' | 'ai';
 }
+// Add a new interface for the full context state
+interface FullAiContext {
+    profile: AiContextUserProfile | null;
+    summary: AiContextDailySummary | null;
+    fridge: string[] | null; // <-- Add fridge
+}
 
 const promptStarters = [
-    "How am I doing on my calorie goal today?",
+    "What can I make for dinner with what I have?",
     "Suggest a high-protein snack.",
+    "How am I doing on my calorie goal today?",
     "What's a good 30-minute workout I can do?",
-    "Explain my TDEE in simple terms.",
 ];
 
 export default function AiChatPage() {
@@ -41,7 +48,7 @@ export default function AiChatPage() {
     const router = useRouter();
     // --- STATE ---
     const [inputMessage, setInputMessage] = useState('');
-    const welcomeMessage = "Hello! I'm your AI Coach. I have your profile and daily logs ready. How can I help you?";
+    const welcomeMessage = "Hello! I'm your AI Coach. I have your profile, daily logs, and fridge items ready. How can I help you?";
     const [chatHistory, setChatHistory] = useState<Message[]>([
         { id: 'init', text: welcomeMessage, sender: 'ai' }
     ]);
@@ -51,10 +58,19 @@ export default function AiChatPage() {
     const [model, setModel] = useState<GenerativeModel | null>(null);
     const [chatSession, setChatSession] = useState<ChatSession | null>(null);
     const [isModelInitializing, setIsModelInitializing] = useState(true);
-    const [aiContext, setAiContext] = useState<{ profile: AiContextUserProfile | null, summary: AiContextDailySummary | null }>({ profile: null, summary: null });
+    // UPDATE aicontext state to use the new interface
+    const [aiContext, setAiContext] = useState<FullAiContext>({ profile: null, summary: null, fridge: null });
 
 
     // --- LOGIC HOOKS ---
+    const fetchAllContext = useCallback(async () => {
+        if (!user) return;
+        const profile = await getUserProfileAndTargetsForAI(user.uid);
+        const summary = await getDailyNutritionalSummaryForAI(user.uid) || null;
+        const fridge = await getFridgeItemsForAI(user.uid) || []; // <-- Fetch fridge items
+        setAiContext({ profile, summary, fridge });
+    }, [user]);
+
     useEffect(() => {
         if (user) {
             setIsModelInitializing(true);
@@ -67,17 +83,11 @@ export default function AiChatPage() {
                 .catch(error => console.error("Failed to initialize AI Model:", error))
                 .finally(() => setIsModelInitializing(false));
 
-            const fetchContext = async () => {
-                const profile = await getUserProfileAndTargetsForAI(user.uid);
-                const summary = await getDailyNutritionalSummaryForAI(user.uid) || null;
-                setAiContext({ profile, summary });
-            };
-            fetchContext();
-
+            fetchAllContext();
         } else if (!authLoading) {
             router.push('/login');
         }
-    }, [user, authLoading, router]);
+    }, [user, authLoading, router, fetchAllContext]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -95,17 +105,16 @@ export default function AiChatPage() {
         setIsLoadingAiResponse(true);
 
         try {
-            const { profile, summary } = await (async () => {
-                const p = await getUserProfileAndTargetsForAI(user.uid);
-                const s = await getDailyNutritionalSummaryForAI(user.uid) || null;
-                setAiContext({ profile: p, summary: s });
-                return { profile: p, summary: s };
-            })();
+            // Re-fetch context to ensure it's fresh for the prompt
+            await fetchAllContext();
+            // We use the state `aiContext` which is now fresh
+            const { profile, summary, fridge } = aiContext;
 
             const contextStrings: string[] = [];
-            contextStrings.push("System: You are FitLog AI, a friendly and knowledgeable nutrition and fitness coach. Your goal is to provide supportive, evidence-based advice based on the user's profile, targets, and current day's intake. Avoid overly technical jargon and prioritize safety. Do not provide medical advice.");
+            contextStrings.push("System: You are FitLog AI..."); // Keep your system prompt
 
             if (profile) {
+                // ... (your existing profile context construction)
                 let profileContext = "User Profile & Targets Context:";
                 if (profile.fitnessGoal) profileContext += `\n- Goal: ${profile.fitnessGoal}`;
                 if (profile.activityLevel) profileContext += `\n- Activity Level: ${profile.activityLevel}`;
@@ -115,11 +124,10 @@ export default function AiChatPage() {
                 if (profile.targetCarbGrams) profileContext += `\n- Daily Carb Target: ${profile.targetCarbGrams.toFixed(1)}g`;
                 if (profile.targetFatGrams) profileContext += `\n- Daily Fat Target: ${profile.targetFatGrams.toFixed(1)}g`;
                 contextStrings.push(profileContext);
-            } else {
-                contextStrings.push("User Profile Context: Not available.");
             }
 
             if (summary) {
+                // ... (your existing summary context construction)
                 let summaryContext = "Today's Nutritional Summary:";
                 summaryContext += `\n- Calories from Food: ${summary.consumedCalories.toFixed(0)} kcal`;
                 summaryContext += `\n- Calories Burned (Exercise): ${summary.exerciseCaloriesBurned.toFixed(0)} kcal`;
@@ -132,8 +140,12 @@ export default function AiChatPage() {
                 summaryContext += `\n- Carbs Consumed: ${summary.consumedCarbs.toFixed(1)}g`;
                 summaryContext += `\n- Fat Consumed: ${summary.consumedFat.toFixed(1)}g`;
                 contextStrings.push(summaryContext);
-            } else {
-                contextStrings.push("Today's Nutritional Summary: No intake or exercise logged yet.");
+            }
+
+            // <-- ADD THE NEW FRIDGE CONTEXT -->
+            if (fridge && fridge.length > 0) {
+                const fridgeContext = `The user has these items in their fridge: ${fridge.join(', ')}. When making meal or recipe suggestions, please prioritize using these ingredients if possible.`;
+                contextStrings.push(fridgeContext);
             }
 
             contextStrings.push(`\nUser Query: ${currentMessageText}`);
@@ -169,16 +181,9 @@ export default function AiChatPage() {
         handleSendMessage();
     };
 
-    // --- STYLES ---
-    const darkPaperStyles = {
-        backgroundColor: '#1A1629', color: '#E0E0E0', borderRadius: 3,
-        border: '1px solid', borderColor: 'rgba(255, 255, 255, 0.12)',
-    };
-    const darkInputStyles = {
-        '& .MuiInputBase-root': { backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '20px' },
-        '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: 'transparent' }, '&:hover fieldset': { borderColor: 'primary.light' }, '&.Mui-focused fieldset': { borderColor: 'primary.main' } },
-        '& .MuiInputLabel-root': { color: 'grey.400' },
-    };
+    // --- STYLES (remain the same) ---
+    const darkPaperStyles = { /* ... */ };
+    const darkInputStyles = { /* ... */ };
 
     // --- RENDER LOGIC ---
     if (authLoading || isModelInitializing) {
@@ -189,7 +194,7 @@ export default function AiChatPage() {
     }
 
     return (
-        <Box sx={{ backgroundColor: '#0D0B14', minHeight: 'calc(100vh - 64px)', p: { xs: 1, md: 3 } }}>
+        <Box sx={{ minHeight: 'calc(100vh - 64px)', p: { xs: 1, md: 3 } }}>
             <Container maxWidth="lg" sx={{ height: 'calc(100vh - 64px - 48px)', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Typography variant="h4" component="h1" sx={{ color: '#fff', textAlign: 'center' }}>
                     AI Fitness & Nutrition Coach
@@ -203,18 +208,26 @@ export default function AiChatPage() {
                             <Box>
                                 <Typography variant="subtitle2" color="grey.400" gutterBottom>User Profile & Targets</Typography>
                                 <Stack direction="row" useFlexGap flexWrap="wrap" spacing={1}>
-                                    {aiContext.profile ? Object.entries(aiContext.profile).map(([key, value]) => value && <Chip key={key} label={`${key}: ${value}`} size="small" />) : <Chip label="No profile data available" size="small" variant="outlined"/>}
+                                    {aiContext.profile ? Object.entries(aiContext.profile).map(([key, value]) => value && <Chip key={key} label={`${key}: ${value}`} size="small" />) : <Chip label="No profile data" size="small" variant="outlined"/>}
                                 </Stack>
                             </Box>
                             <Box>
                                 <Typography variant="subtitle2" color="grey.400" gutterBottom>Summary of the day</Typography>
                                 <Stack direction="row" useFlexGap flexWrap="wrap" spacing={1}>
-                                    {aiContext.summary ? Object.entries(aiContext.summary).map(([key, value]) => <Chip key={key} label={`${key}: ${Number(value).toFixed(0)}`} size="small" />) : <Chip label="No activity logged today" size="small" variant="outlined" />}
+                                    {aiContext.summary ? Object.entries(aiContext.summary).map(([key, value]) => <Chip key={key} label={`${key}: ${Number(value).toFixed(0)}`} size="small" />) : <Chip label="No activity today" size="small" variant="outlined" />}
+                                </Stack>
+                            </Box>
+                            {/* NEW SECTION FOR FRIDGE ITEMS */}
+                            <Box>
+                                <Typography variant="subtitle2" color="grey.400" gutterBottom>Items in Fridge</Typography>
+                                <Stack direction="row" useFlexGap flexWrap="wrap" spacing={1}>
+                                    {aiContext.fridge && aiContext.fridge.length > 0 ? aiContext.fridge.map((item) => <Chip key={item} label={item} size="small" />) : <Chip label="No items in fridge" size="small" variant="outlined" />}
                                 </Stack>
                             </Box>
                         </Stack>
                     </AccordionDetails>
                 </Accordion>
+                {/* ... (rest of your chat UI remains the same) ... */}
                 <Paper sx={{ ...darkPaperStyles, flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 2 }}>
                         {chatHistory.map(msg => (
