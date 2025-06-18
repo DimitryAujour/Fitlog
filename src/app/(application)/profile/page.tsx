@@ -435,7 +435,13 @@ export default function ProfilePage() {
                         <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
                             <Button variant="outlined" component="label">
                                 Choose Image
-                                <Input type="file" hidden accept="image/*" onChange={handleFileSelect} />
+                                {/* CORRECTED LINE: The 'accept' prop is now inside 'inputProps' */}
+                                <Input
+                                    type="file"
+                                    hidden
+                                    onChange={handleFileSelect}
+                                    inputProps={{ accept: "image/*" }}
+                                />
                             </Button>
                             <Button
                                 variant="contained"

@@ -164,7 +164,8 @@ export default function FridgePage() {
 
             <Grid container spacing={4}>
                 {/* Left Side: Search and Add Items */}
-                <Grid item xs={12} md={6}>
+                {/* CORRECTED LINE: Replaced item, xs, md with the size prop */}
+                <Grid size={{ xs: 12, md: 6 }}>
                     <Paper sx={{ p: 2 }}>
                         <Typography variant="h6" gutterBottom>Add Items to Fridge</Typography>
                         <Box component="form" onSubmit={handleSearch} sx={{ display: 'flex', gap: 1, mb: 2 }}>
@@ -195,7 +196,8 @@ export default function FridgePage() {
                 </Grid>
 
                 {/* Right Side: Current Fridge Contents */}
-                <Grid item xs={12} md={6}>
+                {/* CORRECTED LINE: Replaced item, xs, md with the size prop */}
+                <Grid size={{ xs: 12, md: 6 }}>
                     <Paper sx={{ p: 2 }}>
                         <Typography variant="h6" gutterBottom>Items in Your Fridge</Typography>
                         <Box sx={{ minHeight: 300, maxHeight: 400, overflow: 'auto' }}>
